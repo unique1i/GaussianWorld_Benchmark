@@ -1,0 +1,10 @@
+*.pt
+*.pth
+*.sh
+__pycache__/
+*.pyc
+output/
+output_logs/
+failed_images.txt
+*.log
+logs/

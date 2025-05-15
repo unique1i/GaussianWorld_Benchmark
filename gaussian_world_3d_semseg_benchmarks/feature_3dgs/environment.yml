@@ -1,0 +1,15 @@
+name: feature_3dgs
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - cudatoolkit=11.7
+  - plyfile=0.8.1
+  - python=3.7.13
+  - pytorch=1.13.0
+  - torchvision=0.14.0
+  - tqdm
+  - pip:
+    - submodules/diff-gaussian-rasterization
+    - submodules/simple-knn

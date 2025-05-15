@@ -1,0 +1,6 @@
+segment_anything/ckpt/sam_vit_h_4b8939.pth filter=lfs diff=lfs merge=lfs -text
+*.pt filter=lfs diff=lfs merge=lfs -text
+sam2/checkpoints/sam2.1_hiera_base_plus.pt filter=lfs diff=lfs merge=lfs -text
+sam2/checkpoints/sam2.1_hiera_large.pt filter=lfs diff=lfs merge=lfs -text
+sam2/checkpoints/sam2.1_hiera_small.pt filter=lfs diff=lfs merge=lfs -text
+sam2/checkpoints/sam2.1_hiera_tiny.pt filter=lfs diff=lfs merge=lfs -text
