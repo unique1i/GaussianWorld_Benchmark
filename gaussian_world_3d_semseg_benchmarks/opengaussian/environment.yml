@@ -13,6 +13,6 @@ dependencies:
   - torchvision=0.13.1
   - tqdm
   - pip:
-    - bitarray
-    - scipy
-    - submodules/ashawkey-diff-gaussian-rasterization
+      - bitarray
+      - scipy
+      - submodules/ashawkey-diff-gaussian-rasterization

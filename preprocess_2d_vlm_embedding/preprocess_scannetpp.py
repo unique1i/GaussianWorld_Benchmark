@@ -17,13 +17,13 @@ from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
 from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 from sam2.build_sam import build_sam2
 
-#================================================================================================
+# ================================================================================================
 # this file use the fusion strategy proposed by HOV-SG paper:
 
-# "for each 2D segment, we crop 2 images: 
-# one masking the rest of the image out, 
+# "for each 2D segment, we crop 2 images:
+# one masking the rest of the image out,
 # and another one with the minimum bounding box that contains the full mask (see an example in Fig. 3 ).
-# We then compute CLIP vectors for the full keyframe and for the two images that we cropped, 
+# We then compute CLIP vectors for the full keyframe and for the two images that we cropped,
 # and the final CLIP vector for the 2D segment is the result of fusing the 3 of them."
 # --------------------------------------------------------------------
 
@@ -42,7 +42,9 @@ def create(image_list, data_list, save_folder, use_highlight=False):
     for i, img in tqdm(enumerate(image_list), desc="Embedding images", leave=False):
         timer += 1
         try:
-            img_embed, seg_map = _embed_clip_sam_tiles(img.unsqueeze(0), sam_encoder, use_highlight=use_highlight)
+            img_embed, seg_map = _embed_clip_sam_tiles(
+                img.unsqueeze(0), sam_encoder, use_highlight=use_highlight
+            )
         except:
             raise ValueError(timer)
 
@@ -68,7 +70,8 @@ def create(image_list, data_list, save_folder, use_highlight=False):
             if j == 0:
                 seg_map_tensor.append(torch.from_numpy(v))
                 continue
-            assert v.max() == lengths[j] - 1, f"{j}, {v.max()}, {lengths[j] - 1}"
+            assert v.max() == lengths[j] - \
+                1, f"{j}, {v.max()}, {lengths[j] - 1}"
             v[v != -1] += lengths_cumsum[j - 1]
             seg_map_tensor.append(torch.from_numpy(v))
         seg_map = torch.stack(seg_map_tensor, dim=0)
@@ -76,7 +79,8 @@ def create(image_list, data_list, save_folder, use_highlight=False):
 
         save_path = os.path.join(save_folder, data_list[i].split(".")[0])
         assert total_lengths[i] == int(seg_maps[i].max() + 1)
-        curr = {"feature": img_embeds[i, : total_lengths[i]], "seg_maps": seg_maps[i]}
+        curr = {
+            "feature": img_embeds[i, : total_lengths[i]], "seg_maps": seg_maps[i]}
         sava_numpy(save_path, curr)
     mask_generator.predictor.model.to("cpu")
 
@@ -86,21 +90,26 @@ def sava_numpy(save_path, data):
     save_path_f = save_path + "_f.npy"
     np.save(save_path_s, data["seg_maps"].numpy())
     np.save(save_path_f, data["feature"].numpy())
-    print(f"Saved {save_path_s.split('/')[-1]}, shape {data['seg_maps'].shape}, {save_path_f.split('/')[-1]}, shape {data['feature'].shape}")
-    
+    print(
+        f"Saved {save_path_s.split('/')[-1]}, shape {data['seg_maps'].shape}, {save_path_f.split('/')[-1]}, shape {data['feature'].shape}"
+    )
 
-def _embed_clip_sam_tiles(image, sam_encoder_func, use_highlight=False, highlight_more=False):
+
+def _embed_clip_sam_tiles(
+    image, sam_encoder_func, use_highlight=False, highlight_more=False
+):
     # Concatenate input image
     aug_imgs = torch.cat([image])  # Shape: (1, 3, H, W)
-    seg_images, seg_map = sam_encoder_func(aug_imgs, use_highlight=use_highlight)
+    seg_images, seg_map = sam_encoder_func(
+        aug_imgs, use_highlight=use_highlight)
 
     global use_clip
-        # we only encode the masked crops
+    # we only encode the masked crops
 
     # Extract full-image CLIP feature (F_g)
     if not use_clip:
         with torch.no_grad():
-            F_g = model.encode_image((aug_imgs ).to("cuda"))
+            F_g = model.encode_image((aug_imgs).to("cuda"))
             F_g = F_g / F_g.norm(dim=-1, keepdim=True)
 
     # Process crops in batches
@@ -109,7 +118,7 @@ def _embed_clip_sam_tiles(image, sam_encoder_func, use_highlight=False, highligh
         num_crops = crops.shape[0]
         features = []
         for i in range(0, num_crops, batch_size):
-            batch = crops[i:i+batch_size].to("cuda")
+            batch = crops[i: i + batch_size].to("cuda")
             with torch.no_grad():
                 batch_feats = model.encode_image(batch)
             features.append(batch_feats.cpu())
@@ -118,18 +127,20 @@ def _embed_clip_sam_tiles(image, sam_encoder_func, use_highlight=False, highligh
         return torch.cat(features, dim=0)
 
     # Extract features for background and masked crops
-    fm = process_batch(seg_images["default"]["masked"]).cuda()       
+    fm = process_batch(seg_images["default"]["masked"]).cuda()
     fm = fm / fm.norm(dim=-1, keepdim=True)
-    if use_clip: 
+    if use_clip:
         # only process the masked crops if use clip
         # print("processing masked crops only...")
-        return {"default": fm.detach().cpu().half()}, seg_map   
-    fl = process_batch(seg_images["default"]["background"]).cuda()  
+        return {"default": fm.detach().cpu().half()}, seg_map
+    fl = process_batch(seg_images["default"]["background"]).cuda()
     fl = fl / fl.norm(dim=-1, keepdim=True)
 
     # -----------------------------------------------------------------------
     # Dynamic weighting based between fl and fm
-    sim_fl_fm = torch.nn.functional.cosine_similarity(fl, fm, dim=-1, eps=1e-8)  # Shape: (num_masks,)
+    sim_fl_fm = torch.nn.functional.cosine_similarity(
+        fl, fm, dim=-1, eps=1e-8
+    )  # Shape: (num_masks,)
     # If fl and fm are very similar (sim close to 1), the contribution of fm is high.
     # If they are dissimilar (sim is lower), we put more weight on crop_w_bg.
     dynamic_masked_weight = sim_fl_fm.unsqueeze(-1)  # Shape: (num_masks, 1)
@@ -156,7 +167,7 @@ def _embed_clip_sam_tiles(image, sam_encoder_func, use_highlight=False, highligh
     wm = (1 - w_i) * dynamic_masked_weight
     wl = (1 - w_i) * (1 - dynamic_masked_weight)
     if highlight_more:
-        wm, wl = wl, wm # prioritize the background crop more
+        wm, wl = wl, wm  # prioritize the background crop more
 
     # Fuse all three features: F_p = wg*F_g + wl*fl + wm*fm
     F_p = wg * F_g_expanded + wl * fl + wm * fm
@@ -168,27 +179,31 @@ def _embed_clip_sam_tiles(image, sam_encoder_func, use_highlight=False, highligh
         f"crop_w_bg: {wl.mean().item():.3f}, "
         f"crop_masked: {wm.mean().item():.3f}"
     )
-    print(f"Average cosine similarity between crop_w_bg and crop_masked: {sim_fl_fm.mean().item():.3f}")
+    print(
+        f"Average cosine similarity between crop_w_bg and crop_masked: {sim_fl_fm.mean().item():.3f}"
+    )
 
     # Return the fused CLIP embeddings in half precision
     clip_embeds = {"default": F_p.detach().cpu().half()}
     return clip_embeds, seg_map
 
+
 def get_bbox_crop(mask, image):
     """Crop the image using the mask's bounding box, retaining background."""
     x, y, w, h = np.int32(mask["bbox"])
-    return image[y : y + h, x : x + w, ...]
+    return image[y: y + h, x: x + w, ...]
+
 
 def get_seg_img(mask, image, mode="mask", pad=25):
     """
     Get the segmented image patch, based on the given mask and image.
-    
+
     Parameters:
     - mask: A dictionary containing the segmentation mask information.
     - image: The original image.
     - mode: The mode for cropping. Options: "mask" (default), "highlight"
     - pad: The padding value for highlight mode. Default is 25.
-    
+
     Returns:
     - The processed image segment
     """
@@ -197,28 +212,40 @@ def get_seg_img(mask, image, mode="mask", pad=25):
         image = image.copy()
         image[mask["segmentation"] == 0] = np.array([0, 0, 0], dtype=np.uint8)
         x, y, w, h = np.int32(mask["bbox"])
-        seg_img = image[y : y + h, x : x + w, ...]
+        seg_img = image[y: y + h, x: x + w, ...]
         return seg_img
-    
+
     elif mode == "highlight":
         image = image.copy()
         # Make background slightly translucent
-        image[mask['segmentation'] == 0] = ((image[mask['segmentation'] == 0].astype(np.float32) + 2*255) / 3).astype(np.uint8)
-        
+        image[mask["segmentation"] == 0] = (
+            (image[mask["segmentation"] == 0].astype(np.float32) + 2 * 255) / 3
+        ).astype(np.uint8)
+
         # Crop with padding
-        x, y, w, h = np.int32(mask['bbox'])
-        seg_img = image[max(0, y-pad):min(image.shape[0], y+h+pad), 
-                        max(0, x-pad):min(image.shape[1], x+w+pad), ...]
-        
+        x, y, w, h = np.int32(mask["bbox"])
+        seg_img = image[
+            max(0, y - pad): min(image.shape[0], y + h + pad),
+            max(0, x - pad): min(image.shape[1], x + w + pad),
+            ...,
+        ]
+
         # Create mask for this cropped region
-        seg_mask = (mask['segmentation'] == 0)[max(0, y-pad):min(image.shape[0], y+h+pad), 
-                                             max(0, x-pad):min(image.shape[1], x+w+pad)]
-        
+        seg_mask = (mask["segmentation"] == 0)[
+            max(0, y - pad): min(image.shape[0], y + h + pad),
+            max(0, x - pad): min(image.shape[1], x + w + pad),
+        ]
+
         # Find and draw red contour
-        contours, _ = cv2.findContours((255-seg_mask*255).astype(np.uint8), 
-                                       cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        seg_img = cv2.drawContours(seg_img, contours, -1, (255, 0, 0), 3)  # Red outline (BGR)
-        
+        contours, _ = cv2.findContours(
+            (255 - seg_mask * 255).astype(np.uint8),
+            cv2.RETR_TREE,
+            cv2.CHAIN_APPROX_SIMPLE,
+        )
+        seg_img = cv2.drawContours(
+            seg_img, contours, -1, (255, 0, 0), 3
+        )  # Red outline (BGR)
+
         return seg_img
 
 
@@ -227,9 +254,9 @@ def pad_img(img):
     l = max(w, h)
     pad = np.zeros((l, l, 3), dtype=np.uint8)
     if h > w:
-        pad[:, (h - w) // 2 : (h - w) // 2 + w, :] = img
+        pad[:, (h - w) // 2: (h - w) // 2 + w, :] = img
     else:
-        pad[(w - h) // 2 : (w - h) // 2 + h, :, :] = img
+        pad[(w - h) // 2: (w - h) // 2 + h, :, :] = img
     return pad
 
 
@@ -249,7 +276,8 @@ def mask_nms(masks, scores, iou_thr=0.7, score_thr=0.1, inner_thr=0.2, **kwargs)
     masks_ord = masks[idx.view(-1), :]
     masks_area = torch.sum(masks_ord, dim=(1, 2), dtype=torch.float)
 
-    iou_matrix = torch.zeros((num_masks,) * 2, dtype=torch.float, device=masks.device)
+    iou_matrix = torch.zeros(
+        (num_masks,) * 2, dtype=torch.float, device=masks.device)
     inner_iou_matrix = torch.zeros(
         (num_masks,) * 2, dtype=torch.float, device=masks.device
     )
@@ -343,7 +371,7 @@ def sam_encoder(image, use_highlight=False):
         seg_img_list_masked = []
         seg_img_list_background = []
         seg_map = -np.ones(image.shape[:2], dtype=np.int32)
-        
+
         for i, mask in enumerate(masks):
             # Masked crop (background black)
             seg_img_masked = get_seg_img(mask, image, mode="mask")
@@ -351,34 +379,39 @@ def sam_encoder(image, use_highlight=False):
                 pad_img(seg_img_masked), (CROP_SIZE, CROP_SIZE)
             )
             seg_img_list_masked.append(pad_seg_img_masked)
-            
+
             # Crop with background - use highlight mode if enabled
             if use_highlight:
                 seg_img_background = get_seg_img(mask, image, mode="highlight")
             else:
                 seg_img_background = get_bbox_crop(mask, image)
-                
+
             pad_seg_img_background = cv2.resize(
                 pad_img(seg_img_background), (CROP_SIZE, CROP_SIZE)
             )
             seg_img_list_background.append(pad_seg_img_background)
-            
+
             seg_map[mask["segmentation"]] = i
-        
+
         # Convert to PyTorch tensors
         seg_imgs_masked = (
-            torch.from_numpy(np.stack(seg_img_list_masked, axis=0).astype("float32")).permute(0, 3, 1, 2) 
+            torch.from_numpy(
+                np.stack(seg_img_list_masked, axis=0).astype("float32")
+            ).permute(0, 3, 1, 2)
         ).to("cuda")
         seg_imgs_background = (
-            torch.from_numpy(np.stack(seg_img_list_background, axis=0).astype("float32")).permute(0, 3, 1, 2) 
+            torch.from_numpy(
+                np.stack(seg_img_list_background, axis=0).astype("float32")
+            ).permute(0, 3, 1, 2)
         ).to("cuda")
-        
+
         return {"masked": seg_imgs_masked, "background": seg_imgs_background}, seg_map
 
     # check the size each mask in masks_default
     masks_default = [m for m in masks_default if m["area"] > 10]
     seg_images, seg_maps = {}, {}
-    seg_images["default"], seg_maps["default"] = mask2segmap(masks_default, image)
+    seg_images["default"], seg_maps["default"] = mask2segmap(
+        masks_default, image)
     return seg_images, seg_maps
 
 
@@ -395,7 +428,9 @@ def seed_everything(seed_value):
         torch.backends.cudnn.benchmark = True
 
 
-def process_single_image(img, data_path, save_folder, i, use_highlight=False, highlight_more=False):
+def process_single_image(
+    img, data_path, save_folder, i, use_highlight=False, highlight_more=False
+):
     """
     Process a single image and save the outputs (feature + seg_maps)
     to disk as .npy files.
@@ -403,7 +438,9 @@ def process_single_image(img, data_path, save_folder, i, use_highlight=False, hi
     # Update embed_size to match the SigLIP embedding dimension.
     embed_size = model.embedding_dim
 
-    img_embed, seg_map = _embed_clip_sam_tiles(img, sam_encoder, use_highlight=use_highlight, highlight_more=highlight_more)
+    img_embed, seg_map = _embed_clip_sam_tiles(
+        img, sam_encoder, use_highlight=use_highlight, highlight_more=highlight_more
+    )
 
     lengths = [len(v) for k, v in img_embed.items()]
     total_length = sum(lengths)
@@ -438,7 +475,8 @@ def process_single_image(img, data_path, save_folder, i, use_highlight=False, hi
 
 def get_selected_image_paths(scene_path):
     data_list = []
-    json_path = os.path.join(scene_path, "nerfstudio", "lang_feat_selected_imgs.json")
+    json_path = os.path.join(scene_path, "nerfstudio",
+                             "lang_feat_selected_imgs.json")
     if not os.path.exists(json_path):
         raise FileNotFoundError(f"File not found: {json_path}")
 
@@ -452,7 +490,8 @@ def get_selected_image_paths(scene_path):
         if os.path.exists(img_path):
             data_list.append(img_path)
         else:
-            print(f"Warning: Image {img_path} does not exist. Skipping this image.")
+            print(
+                f"Warning: Image {img_path} does not exist. Skipping this image.")
 
     data_list = sorted(data_list)
     return data_list
@@ -464,8 +503,10 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset_path", type=str, required=True)
-    parser.add_argument("--model", type=str, default="sam2", help="sam2 or sam")
-    parser.add_argument("--resolution", type=int, default=-1, help="target width size")
+    parser.add_argument("--model", type=str,
+                        default="sam2", help="sam2 or sam")
+    parser.add_argument("--resolution", type=int,
+                        default=-1, help="target width size")
     parser.add_argument("--resize", type=tuple)
     parser.add_argument("--crop_edge", type=int, default=0)
     parser.add_argument("--use_clip", action="store_true")
@@ -479,12 +520,18 @@ if __name__ == "__main__":
     )
     parser.add_argument("--save_folder", type=str, default=None)
     # Add the highlight argument
-    parser.add_argument("--highlight", action="store_true", help="Use highlight mode for background crops")
-    parser.add_argument("--highlight_more", action="store_true", help="Prioritize background crop more")
+    parser.add_argument(
+        "--highlight",
+        action="store_true",
+        help="Use highlight mode for background crops",
+    )
+    parser.add_argument(
+        "--highlight_more", action="store_true", help="Prioritize background crop more"
+    )
     args = parser.parse_args()
     torch.set_default_dtype(torch.float32)
 
-    # Define batch_size for crop processing 
+    # Define batch_size for crop processing
     batch_size = 32
 
     dataset_path = args.dataset_path
@@ -581,7 +628,14 @@ if __name__ == "__main__":
 
         image_tensor = torch.from_numpy(image).permute(2, 0, 1)[None, ...]
         try:
-            process_single_image(image_tensor, data_path, save_folder, i, use_highlight=use_highlight, highlight_more=highlight_more)
+            process_single_image(
+                image_tensor,
+                data_path,
+                save_folder,
+                i,
+                use_highlight=use_highlight,
+                highlight_more=highlight_more,
+            )
         except Exception as e:
             print(f"\nFailed to process image {data_path}: {str(e)}")
             if not os.path.exists("failed_images.txt"):

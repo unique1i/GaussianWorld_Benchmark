@@ -19,12 +19,12 @@
 | `--absgrad --grow_grad2d 6e-4`       | 8m58s    | 0.011s/im | 4.42 GB | 0.5966 | 19.58 | 0.654 | 2.21M |
 | `--absgrad --grow_grad2d 6e-4` (30k) | --       | 0.016s/im | 5.09 GB | 0.7439 | 24.28 | 0.400 | 2.92M |
 
-| U4 at 7k steps (RTX 2080 Ti)                 | T(train) | T(render) | Memory  | SSIM   | PSNR  | LPIPS | #GS.  |
-| -------------------------------------------- | -------- | --------- | ------- | ------ | ----- | ----- | ----- |
-| `--grow_grad2d 5e-5`                         | 7m30s    | 0.014s/im | 1.68 GB | 0.6271 | 20.86 | 0.583 | 0.61M |
-| `--grow_grad2d 5e-5` (30k)                   | --       | 0.026s/im | 4.21 GB | 0.7402 | 24.05 | 0.299 | 2.44M |
-| `--absgrad --grow_grad2d 2e-4`               | 8m30s    | 0.018s/im | 2.21 GB | 0.6251 | 20.68 | 0.587 | 0.89M |
-| `--absgrad --grow_grad2d 2e-4` (30k)         | --       | 0.030s/im | 5.25 GB | 0.7442 | 24.12 | 0.291 | 2.62M |
+| U4 at 7k steps (RTX 2080 Ti)         | T(train) | T(render) | Memory  | SSIM   | PSNR  | LPIPS | #GS.  |
+| ------------------------------------ | -------- | --------- | ------- | ------ | ----- | ----- | ----- |
+| `--grow_grad2d 5e-5`                 | 7m30s    | 0.014s/im | 1.68 GB | 0.6271 | 20.86 | 0.583 | 0.61M |
+| `--grow_grad2d 5e-5` (30k)           | --       | 0.026s/im | 4.21 GB | 0.7402 | 24.05 | 0.299 | 2.44M |
+| `--absgrad --grow_grad2d 2e-4`       | 8m30s    | 0.018s/im | 2.21 GB | 0.6251 | 20.68 | 0.587 | 0.89M |
+| `--absgrad --grow_grad2d 2e-4` (30k) | --       | 0.030s/im | 5.25 GB | 0.7442 | 24.12 | 0.291 | 2.62M |
 
 Note: default args means running `CUDA_VISIBLE_DEVICES=0 python simple_trainer.py default --data_dir <DATA_DIR>` with:
 

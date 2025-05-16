@@ -1,0 +1,8 @@
+[tool.ruff]
+# Which rules to enable/disable
+select = ["E", "F", "I", "B", "C"]
+ignore = ["E501"]         # ignore line‐length
+extend-ignore = ["W391"]  # trailing‐newline warning
+# How aggressively to wrap imports, etc.
+line-length = 88
+target-version = "py310"

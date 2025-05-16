@@ -145,7 +145,8 @@ class Config:
     # Weight for depth loss
     depth_lambda: float = 1.0
 
-    ignore_pixel_border: int = 0 # ignore this pixel border when calculating the image loss
+    # ignore this pixel border when calculating the image loss
+    ignore_pixel_border: int = 0
 
     # Dump information to tensorboard every this steps
     tb_every: int = 100
@@ -159,10 +160,11 @@ class Config:
     lpips_net: Literal["vgg", "alex"] = "alex"
     render_traj: bool = False
     prune_by_bbox: bool = False
-    disable_growing: bool = False # disable the growing of GSs in default startegy
-    disable_pruning: bool = False # disable the pruning of GSs in default startegy
-    disable_xyz_opti: bool = False # disable the optimization of xyz in default strategy
-    reset_every: int = 3000 
+    disable_growing: bool = False  # disable the growing of GSs in default startegy
+    disable_pruning: bool = False  # disable the pruning of GSs in default startegy
+    # disable the optimization of xyz in default strategy
+    disable_xyz_opti: bool = False
+    reset_every: int = 3000
 
     def adjust_steps(self, factor: float):
         self.eval_steps = [int(i * factor) for i in self.eval_steps]
@@ -224,7 +226,7 @@ def create_splats_with_optimizers(
     else:
         print("No parser or points3d_data provided, use random 3DGS initialization.")
         points = init_extent * scene_scale * \
-                (torch.rand((init_num_pts, 3)) * 2 - 1)
+            (torch.rand((init_num_pts, 3)) * 2 - 1)
         rgbs = torch.rand((init_num_pts, 3))
 
     # Initialize the GS size to be the average dist of the 3 nearest neighbors
@@ -362,7 +364,8 @@ class Runner:
             assert_never(self.cfg.strategy)
         if self.init_point_num is not None and self.cfg.cap_max_by_init_point_num:
             # when init_point_num is the from point clouds voxel downsampling, it reflects the scene size
-            cap_max = min( round(1.5 * self.init_point_num / 1_000) * 1_000, self.cfg.strategy.cap_max)
+            cap_max = min(round(1.5 * self.init_point_num / 1_000)
+                          * 1_000, self.cfg.strategy.cap_max)
             self.cfg.strategy.cap_max = int(cap_max)
             print(f"MCMC cap_max of GSs set to {cap_max}.")
         if self.cfg.prune_by_bbox:
@@ -569,8 +572,9 @@ class Runner:
                     data = next(trainloader_iter)
                 if data["image"] is None or (cfg.depth_loss and data["depth"] is None):
                     sample_info = f"image_id: {data['image_id'].item()}, name: {data['image_name']}"
-                    print(f"\033[93mWARNING [Step {step}]: Skipping sample with failed load ({sample_info})\033[0m")
-                    
+                    print(
+                        f"\033[93mWARNING [Step {step}]: Skipping sample with failed load ({sample_info})\033[0m")
+
                     if not cfg.disable_viewer:
                         self.viewer.lock.release()
                     continue
@@ -644,9 +648,9 @@ class Runner:
             if self.cfg.ignore_pixel_border > 0:
                 ignore_pixel_border = self.cfg.ignore_pixel_border
                 pixels = pixels[:, ignore_pixel_border:-ignore_pixel_border,
-                               ignore_pixel_border:-ignore_pixel_border, :]
+                                ignore_pixel_border:-ignore_pixel_border, :]
                 colors = colors[:, ignore_pixel_border:-ignore_pixel_border,
-                               ignore_pixel_border:-ignore_pixel_border, :]
+                                ignore_pixel_border:-ignore_pixel_border, :]
             l1loss = F.l1_loss(colors, pixels)
             ssimloss = 1.0 - self.ssim(
                 pixels.permute(0, 3, 1, 2), colors.permute(0, 3, 1, 2)
@@ -659,24 +663,26 @@ class Runner:
                 #                        ignore_pixel_border:-ignore_pixel_border]
                 #     depths = depths[:, ignore_pixel_border:-ignore_pixel_border,
                 #                     ignore_pixel_border:-ignore_pixel_border]
-                
+
                 nan_mask_1 = ~torch.isnan(depth_gt).squeeze()
                 nan_mask_2 = ~torch.isnan(depths.squeeze())
-                filter_mask = nan_mask_1 & nan_mask_2 & (depth_gt.squeeze() > 0.01)
+                filter_mask = nan_mask_1 & nan_mask_2 & (
+                    depth_gt.squeeze() > 0.01)
 
                 if filter_mask.sum() > 0:
                     depth_err = torch.zeros_like(depth_gt.squeeze())
-                    depth_err[filter_mask] = depth_gt.squeeze()[filter_mask] - depths.squeeze()[filter_mask]
-                    
+                    depth_err[filter_mask] = depth_gt.squeeze(
+                    )[filter_mask] - depths.squeeze()[filter_mask]
+
                     valid_errors = depth_err[filter_mask]
                     if valid_errors.numel() > 0:
                         median_err = valid_errors.median()
                         if median_err > 0:
                             err_mask = depth_err.abs() < 10 * median_err
                         else:
-                            err_mask = depth_err.abs() < 2 # fixed threshold to avoid too large error
+                            err_mask = depth_err.abs() < 2  # fixed threshold to avoid too large error
                         loss_mask = filter_mask & err_mask
-                        
+
                         if loss_mask.sum() > 0:
                             depthloss = F.l1_loss(
                                 depths.squeeze()[loss_mask], depth_gt.squeeze()[loss_mask])
@@ -829,7 +835,8 @@ class Runner:
         # our custom collate function that handles error cases
         def collate_fn(batch):
             # Filter out any None values from failed loads
-            valid_samples = [b for b in batch if b["image"] is not None and (not eval_depth or b["depth"] is not None)]
+            valid_samples = [b for b in batch if b["image"] is not None and (
+                not eval_depth or b["depth"] is not None)]
             if not valid_samples:
                 # All samples in this batch failed to load
                 return None
@@ -841,11 +848,12 @@ class Runner:
         )
         ellipse_time = 0
         metrics = {"psnr": [], "ssim": [], "lpips": [], "depth_loss": []}
-        
+
         for i, data in enumerate(valloader):
             try:
                 if data is None:
-                    print(f"\033[93mWARNING [Eval {stage}, Batch {i}]: skipped due to failed loads\033[0m")
+                    print(
+                        f"\033[93mWARNING [Eval {stage}, Batch {i}]: skipped due to failed loads\033[0m")
                     continue
 
                 camtoworlds = data["camtoworld"].to(device)
@@ -896,9 +904,9 @@ class Runner:
                 if self.cfg.ignore_pixel_border > 0:
                     ignore_pixel_border = self.cfg.ignore_pixel_border
                     pixels = pixels[:, :, ignore_pixel_border:-ignore_pixel_border,
-                                   ignore_pixel_border:-ignore_pixel_border]
+                                    ignore_pixel_border:-ignore_pixel_border]
                     colors = colors[:, :, ignore_pixel_border:-ignore_pixel_border,
-                                   ignore_pixel_border:-ignore_pixel_border]
+                                    ignore_pixel_border:-ignore_pixel_border]
                 metrics["psnr"].append(self.psnr(colors, pixels))
                 metrics["ssim"].append(self.ssim(colors, pixels))
                 metrics["lpips"].append(self.lpips(colors, pixels))
@@ -1015,7 +1023,8 @@ class Runner:
             colors = torch.clamp(renders[0, ..., 0:3], 0.0, 1.0)  # [H, W, 3]
             depths = renders[0, ..., 3:4]  # [H, W, 1]
             depths = (depths - depths.min()) / (depths.max() -
-                                                depths.min())  # Normalize depth to [0, 1]
+                                                # Normalize depth to [0, 1]
+                                                depths.min())
 
             # Concatenate the RGB and depth images side by side
             canvas = torch.cat(
@@ -1106,12 +1115,14 @@ class Runner:
 
         list_of_attributes = self.construct_list_of_attributes()
         if self.max_sh_degree == 0:
-            list_of_attributes = [attr for attr in list_of_attributes if 'f_rest' not in attr]
+            list_of_attributes = [
+                attr for attr in list_of_attributes if 'f_rest' not in attr]
         dtype_full = [(attribute, 'f4') for attribute in list_of_attributes]
 
         elements = np.empty(xyz.shape[0], dtype=dtype_full)
         if self.max_sh_degree == 0:
-            attributes = np.concatenate((xyz, normals, f_dc, opacities, scale, rotation), axis=1)
+            attributes = np.concatenate(
+                (xyz, normals, f_dc, opacities, scale, rotation), axis=1)
         else:
             attributes = np.concatenate(
                 (xyz, normals, f_dc, f_rest, opacities, scale, rotation), axis=1)

@@ -16,7 +16,8 @@ class CameraOptModule(torch.nn.Module):
         # Delta positions (3D) + Delta rotations (6D)
         self.embeds = torch.nn.Embedding(n, 9)
         # Identity rotation in 6D representation
-        self.register_buffer("identity", torch.tensor([1.0, 0.0, 0.0, 0.0, 1.0, 0.0]))
+        self.register_buffer("identity", torch.tensor(
+            [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]))
 
     def zero_init(self):
         torch.nn.init.zeros_(self.embeds.weight)
@@ -41,7 +42,8 @@ class CameraOptModule(torch.nn.Module):
         rot = rotation_6d_to_matrix(
             drot + self.identity.expand(*batch_shape, -1)
         )  # (..., 3, 3)
-        transform = torch.eye(4, device=pose_deltas.device).repeat((*batch_shape, 1, 1))
+        transform = torch.eye(4, device=pose_deltas.device).repeat(
+            (*batch_shape, 1, 1))
         transform[..., :3, :3] = rot
         transform[..., :3, 3] = dx
         return torch.matmul(camtoworlds, transform)
@@ -65,7 +67,8 @@ class AppearanceOptModule(torch.nn.Module):
         self.embeds = torch.nn.Embedding(n, embed_dim)
         layers = []
         layers.append(
-            torch.nn.Linear(embed_dim + feature_dim + (sh_degree + 1) ** 2, mlp_width)
+            torch.nn.Linear(embed_dim + feature_dim +
+                            (sh_degree + 1) ** 2, mlp_width)
         )
         layers.append(torch.nn.ReLU(inplace=True))
         for _ in range(mlp_depth - 1):
@@ -102,11 +105,14 @@ class AppearanceOptModule(torch.nn.Module):
         dirs = F.normalize(dirs, dim=-1)  # [C, N, 3]
         num_bases_to_use = (sh_degree + 1) ** 2
         num_bases = (self.sh_degree + 1) ** 2
-        sh_bases = torch.zeros(C, N, num_bases, device=features.device)  # [C, N, K]
-        sh_bases[:, :, :num_bases_to_use] = _eval_sh_bases_fast(num_bases_to_use, dirs)
+        sh_bases = torch.zeros(
+            C, N, num_bases, device=features.device)  # [C, N, K]
+        sh_bases[:, :, :num_bases_to_use] = _eval_sh_bases_fast(
+            num_bases_to_use, dirs)
         # Get colors
         if self.embed_dim > 0:
-            h = torch.cat([embeds, features, sh_bases], dim=-1)  # [C, N, D1 + D2 + K]
+            h = torch.cat([embeds, features, sh_bases],
+                          dim=-1)  # [C, N, D1 + D2 + K]
         else:
             h = torch.cat([features, sh_bases], dim=-1)
         colors = self.color_head(h)
@@ -164,44 +170,47 @@ def compute_intrinsics_matrix(fx, fy, cx, cy):
         ]
     )
 
+
 def load_glb_file(file_path):
     """
     Load a GLB file using trimesh and extract points and colors.
-    
+
     Args:
         file_path: Path to the GLB file
-        
+
     Returns:
         tuple: (points, colors) as numpy arrays
     """
     import trimesh
     import numpy as np
-    
+
     # Load the GLB file using trimesh
     try:
         loaded_obj = trimesh.load(file_path)
     except Exception as e:
         print(f"Error loading file {file_path}: {e}")
         raise
-    
+
     # Initialize arrays for collecting points and colors
     all_points = []
     all_colors = []
-    
+
     # Handle both single mesh and scene with multiple meshes
     if isinstance(loaded_obj, trimesh.Scene):
         # It's a scene, process each mesh
-        print(f"[load_points3d] GLB loaded as a scene with {len(loaded_obj.geometry)} meshes")
-        
+        print(
+            f"[load_points3d] GLB loaded as a scene with {len(loaded_obj.geometry)} meshes")
+
         for mesh_name, mesh in loaded_obj.geometry.items():
             # Skip non-mesh objects
             if not hasattr(mesh, 'vertices') or len(mesh.vertices) == 0:
                 continue
-                
+
             # Get vertices for this mesh
             mesh_points = np.array(mesh.vertices)
-            mesh_colors = np.ones((mesh_points.shape[0], 3)) * 0.5  # Default gray
-            
+            mesh_colors = np.ones(
+                (mesh_points.shape[0], 3)) * 0.5  # Default gray
+
             # Handle colors based on what's available - with extra safety checks
             if hasattr(mesh, 'visual'):
                 if hasattr(mesh.visual, 'vertex_colors') and mesh.visual.vertex_colors is not None:
@@ -221,13 +230,17 @@ def load_glb_file(file_path):
                     # Try to get material color
                     if hasattr(mesh.visual.material, 'baseColorFactor') and mesh.visual.material.baseColorFactor is not None:
                         try:
-                            base_color = np.array(mesh.visual.material.baseColorFactor)
+                            base_color = np.array(
+                                mesh.visual.material.baseColorFactor)
                             if base_color.size >= 3:  # Make sure we have at least RGB
-                                base_color = base_color[:3]  # Just take the RGB part
-                                mesh_colors = np.tile(base_color, (mesh_points.shape[0], 1))
+                                # Just take the RGB part
+                                base_color = base_color[:3]
+                                mesh_colors = np.tile(
+                                    base_color, (mesh_points.shape[0], 1))
                         except (TypeError, IndexError) as e:
-                            print(f"Warning: Could not use baseColorFactor: {e}")
-            
+                            print(
+                                f"Warning: Could not use baseColorFactor: {e}")
+
             # Add to our collections
             all_points.append(mesh_points)
             all_colors.append(mesh_colors)
@@ -235,10 +248,10 @@ def load_glb_file(file_path):
         # It's a single mesh
         if not hasattr(loaded_obj, 'vertices') or len(loaded_obj.vertices) == 0:
             raise ValueError("Loaded mesh has no vertices")
-            
+
         mesh_points = np.array(loaded_obj.vertices)
         mesh_colors = np.ones((mesh_points.shape[0], 3)) * 0.5  # Default gray
-        
+
         # Extract colors with extra safety checks
         if hasattr(loaded_obj, 'visual'):
             if hasattr(loaded_obj.visual, 'vertex_colors') and loaded_obj.visual.vertex_colors is not None:
@@ -256,20 +269,23 @@ def load_glb_file(file_path):
             elif hasattr(loaded_obj.visual, 'material') and loaded_obj.visual.material is not None:
                 if hasattr(loaded_obj.visual.material, 'baseColorFactor') and loaded_obj.visual.material.baseColorFactor is not None:
                     try:
-                        base_color = np.array(loaded_obj.visual.material.baseColorFactor)
+                        base_color = np.array(
+                            loaded_obj.visual.material.baseColorFactor)
                         if base_color.size >= 3:  # Make sure we have at least RGB
-                            base_color = base_color[:3]  # Just take the RGB part
-                            mesh_colors = np.tile(base_color, (mesh_points.shape[0], 1))
+                            # Just take the RGB part
+                            base_color = base_color[:3]
+                            mesh_colors = np.tile(
+                                base_color, (mesh_points.shape[0], 1))
                     except (TypeError, IndexError) as e:
                         print(f"Warning: Could not use baseColorFactor: {e}")
-            
+
         all_points.append(mesh_points)
         all_colors.append(mesh_colors)
-    
+
     # Combine all points and colors
     if not all_points:
         raise ValueError("No valid meshes found in the GLB file")
-        
+
     # Concatenate if we have multiple meshes
     if len(all_points) == 1:
         points = all_points[0]
@@ -277,9 +293,9 @@ def load_glb_file(file_path):
     else:
         points = np.vstack(all_points)
         colors = np.vstack(all_colors)
-    
+
     print(f"[load_points3d] GLB input: {points.shape[0]} points with colors")
-    
+
     return points, colors
 
 
@@ -289,28 +305,33 @@ def load_points3d(points3d_path: Path, surface_sampling=False, mesh_input=False,
         import trimesh
     except ImportError:
         raise ImportError("Please install 'open3d' to read the file.")
-    
+
     try:
         if surface_sampling:
             # Load mesh and validate triangles
             mesh = o3d.io.read_triangle_mesh(str(points3d_path))
             if not mesh.has_triangles():
-                raise ValueError("Input mesh lacks triangles for surface sampling.")
-            
+                raise ValueError(
+                    "Input mesh lacks triangles for surface sampling.")
+
             # Sample points uniformly from the mesh surface
             n_vertices = len(mesh.vertices)
-            print(f"[load_points3d] Mesh input: {n_vertices} vertices, start surface sampling...")
+            print(
+                f"[load_points3d] Mesh input: {n_vertices} vertices, start surface sampling...")
             target_num = upper_num if upper_num else 8 * n_vertices
-            sampled_pcd = mesh.sample_points_uniformly(number_of_points=2 * target_num)
-            sampled_pcd = mesh.sample_points_poisson_disk(number_of_points=target_num, pcl=sampled_pcd)
-            
+            sampled_pcd = mesh.sample_points_uniformly(
+                number_of_points=2 * target_num)
+            sampled_pcd = mesh.sample_points_poisson_disk(
+                number_of_points=target_num, pcl=sampled_pcd)
+
             # Extract points and colors
             points = np.asarray(sampled_pcd.points)
             if sampled_pcd.has_colors():
                 colors = np.asarray(sampled_pcd.colors)
             else:
                 colors = np.random.rand(*points.shape)
-            print(f"[load_points3d] Mesh surface sampling: {points.shape[0]}/{n_vertices} points")
+            print(
+                f"[load_points3d] Mesh surface sampling: {points.shape[0]}/{n_vertices} points")
         elif mesh_input:
             if points3d_path.suffix == ".glb":
                 scene_or_mesh = trimesh.load(points3d_path)
@@ -324,8 +345,9 @@ def load_points3d(points3d_path: Path, surface_sampling=False, mesh_input=False,
                 points = np.array(mesh_trimesh.vertices)  # (N, 3)
                 faces = np.array(mesh_trimesh.faces)      # (M, 3)
                 if hasattr(mesh_trimesh.visual, "vertex_colors") and \
-                len(mesh_trimesh.visual.vertex_colors) == len(points):
-                    rgba_colors = np.array(mesh_trimesh.visual.vertex_colors)  # (N, 4)
+                        len(mesh_trimesh.visual.vertex_colors) == len(points):
+                    rgba_colors = np.array(
+                        mesh_trimesh.visual.vertex_colors)  # (N, 4)
                     # Typically in [0..255]. Convert to [0..1] if you want floating colors:
                     colors = rgba_colors[:, :3] / 255.0  # (N, 3) in RGB
                     print("Found per-vertex colors, shape:", colors.shape)
@@ -347,41 +369,44 @@ def load_points3d(points3d_path: Path, surface_sampling=False, mesh_input=False,
                 colors = np.asarray(pcd.colors)
             else:
                 colors = np.random.rand(*points.shape)
-        
+
         # subsample points if upper_num is specified
         if upper_num is not None and points.shape[0] > upper_num:
-                # Randomly sample points
-                idx = np.random.choice(len(points), upper_num, replace=False)
-                points = points[idx]
-                colors = colors[idx]
-                print(f"[load_points3d] Randomly sampled {upper_num}/{points.shape[0]} points")
+            # Randomly sample points
+            idx = np.random.choice(len(points), upper_num, replace=False)
+            points = points[idx]
+            colors = colors[idx]
+            print(
+                f"[load_points3d] Randomly sampled {upper_num}/{points.shape[0]} points")
     except Exception as e:
         raise RuntimeError(f"Failed to load file: {e}")
-    
+
     # Apply normalization if requested
     if normalize_scale:
         # Calculate bounding box
         bbox_min = np.min(points, axis=0)
         bbox_max = np.max(points, axis=0)
-        
+
         # Calculate scale factor
         bbox_size = bbox_max - bbox_min
         scale_factor = 1.0 / np.max(bbox_size)
-        
+
         # Apply scale to points
         points = points * scale_factor
-        
+
         # Recalculate bounding box after scaling
         bbox_min_scaled = np.min(points, axis=0)
         bbox_max_scaled = np.max(points, axis=0)
-        
+
         # Center points at origin
         offset = -(bbox_min_scaled + bbox_max_scaled) / 2
         points = points + offset
-        
-        print(f"[load_points3d] Applied normalization with scale factor: {scale_factor:.6f}")
-    
+
+        print(
+            f"[load_points3d] Applied normalization with scale factor: {scale_factor:.6f}")
+
     return {"points": points, "colors": colors}
+
 
 def load_npz_first(path):
     with np.load(path) as d:

@@ -252,7 +252,8 @@ def rasterization(
         assert (
             colors.dim() == 3 and colors.shape[0] == N and colors.shape[2] == 3
         ) or (
-            colors.dim() == 4 and colors.shape[:2] == (C, N) and colors.shape[3] == 3
+            colors.dim() == 4 and colors.shape[:2] == (
+                C, N) and colors.shape[3] == 3
         ), colors.shape
         assert (sh_degree + 1) ** 2 <= colors.shape[-2], colors.shape
         if distributed:
@@ -356,7 +357,8 @@ def rasterization(
         # Colors are SH coefficients, with shape [N, K, 3] or [C, N, K, 3]
         camtoworlds = torch.inverse(viewmats)  # [C, 4, 4]
         if packed:
-            dirs = means[gaussian_ids, :] - camtoworlds[camera_ids, :3, 3]  # [nnz, 3]
+            dirs = means[gaussian_ids, :] - \
+                camtoworlds[camera_ids, :3, 3]  # [nnz, 3]
             masks = radii > 0  # [nnz]
             if colors.dim() == 3:
                 # Turn [N, K, 3] into [nnz, 3]
@@ -364,7 +366,8 @@ def rasterization(
             else:
                 # Turn [C, N, K, 3] into [nnz, 3]
                 shs = colors[camera_ids, gaussian_ids, :, :]  # [nnz, K, 3]
-            colors = spherical_harmonics(sh_degree, dirs, shs, masks=masks)  # [nnz, 3]
+            colors = spherical_harmonics(
+                sh_degree, dirs, shs, masks=masks)  # [nnz, 3]
         else:
             dirs = means[None, :, :] - camtoworlds[:, None, :3, 3]  # [C, N, 3]
             masks = radii > 0  # [C, N]
@@ -374,7 +377,8 @@ def rasterization(
             else:
                 # colors is already [C, N, K, 3]
                 shs = colors
-            colors = spherical_harmonics(sh_degree, dirs, shs, masks=masks)  # [C, N, 3]
+            colors = spherical_harmonics(
+                sh_degree, dirs, shs, masks=masks)  # [C, N, 3]
         # make it apple-to-apple with Inria's CUDA Backend.
         colors = torch.clamp_min(colors + 0.5, 0.0)
 
@@ -390,7 +394,8 @@ def rasterization(
 
             # all to all communication across all ranks. After this step, each rank
             # would have all the necessary GSs to render its own images.
-            collected_splits = all_to_all_int32(world_size, cnts, device=device)
+            collected_splits = all_to_all_int32(
+                world_size, cnts, device=device)
             (radii,) = all_to_all_tensor_list(
                 world_size, [radii], cnts, output_splits=collected_splits
             )
@@ -517,9 +522,10 @@ def rasterization(
         n_chunks = (colors.shape[-1] + channel_chunk - 1) // channel_chunk
         render_colors, render_alphas = [], []
         for i in range(n_chunks):
-            colors_chunk = colors[..., i * channel_chunk : (i + 1) * channel_chunk]
+            colors_chunk = colors[..., i *
+                                  channel_chunk: (i + 1) * channel_chunk]
             backgrounds_chunk = (
-                backgrounds[..., i * channel_chunk : (i + 1) * channel_chunk]
+                backgrounds[..., i * channel_chunk: (i + 1) * channel_chunk]
                 if backgrounds is not None
                 else None
             )
@@ -632,13 +638,15 @@ def _rasterization(
         assert (
             colors.dim() == 3 and colors.shape[0] == N and colors.shape[2] == 3
         ) or (
-            colors.dim() == 4 and colors.shape[:2] == (C, N) and colors.shape[3] == 3
+            colors.dim() == 4 and colors.shape[:2] == (
+                C, N) and colors.shape[3] == 3
         ), colors.shape
         assert (sh_degree + 1) ** 2 <= colors.shape[-2], colors.shape
 
     # Project Gaussians to 2D.
     # The results are with shape [C, N, ...]. Only the elements with radii > 0 are valid.
-    covars, _ = _quat_scale_to_covar_preci(quats, scales, True, False, triu=False)
+    covars, _ = _quat_scale_to_covar_preci(
+        quats, scales, True, False, triu=False)
     radii, means2d, depths, conics, compensations = _fully_fused_projection(
         means,
         covars,
@@ -694,7 +702,8 @@ def _rasterization(
         else:
             # colors is already [C, N, K, 3]
             shs = colors
-        colors = spherical_harmonics(sh_degree, dirs, shs, masks=masks)  # [C, N, 3]
+        colors = spherical_harmonics(
+            sh_degree, dirs, shs, masks=masks)  # [C, N, 3]
         # make it apple-to-apple with Inria's CUDA Backend.
         colors = torch.clamp_min(colors + 0.5, 0.0)
 
@@ -716,9 +725,10 @@ def _rasterization(
         n_chunks = (colors.shape[-1] + channel_chunk - 1) // channel_chunk
         render_colors, render_alphas = [], []
         for i in range(n_chunks):
-            colors_chunk = colors[..., i * channel_chunk : (i + 1) * channel_chunk]
+            colors_chunk = colors[..., i *
+                                  channel_chunk: (i + 1) * channel_chunk]
             backgrounds_chunk = (
-                backgrounds[..., i * channel_chunk : (i + 1) * channel_chunk]
+                backgrounds[..., i * channel_chunk: (i + 1) * channel_chunk]
                 if backgrounds is not None
                 else None
             )
@@ -948,7 +958,8 @@ def rasterization_inria_wrapper(
             znear=near_plane, zfar=far_plane, fovX=FoVx, fovY=FoVy, device=device
         ).transpose(0, 1)
         full_proj_transform = (
-            world_view_transform.unsqueeze(0).bmm(projection_matrix.unsqueeze(0))
+            world_view_transform.unsqueeze(0).bmm(
+                projection_matrix.unsqueeze(0))
         ).squeeze(0)
         camera_center = world_view_transform.inverse()[3, :3]
 
@@ -979,7 +990,7 @@ def rasterization_inria_wrapper(
 
         render_colors_ = []
         for i in range(0, channels, 3):
-            _colors = colors[..., i : i + 3]
+            _colors = colors[..., i: i + 3]
             if _colors.shape[-1] < 3:
                 pad = torch.zeros(
                     _colors.shape[0], 3 - _colors.shape[-1], device=device

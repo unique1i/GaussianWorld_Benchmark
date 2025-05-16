@@ -143,7 +143,8 @@ def all_gather_tensor_list(world_size: int, tensor_list: List[Tensor]) -> List[T
 
     N = len(tensor_list[0])
     for tensor in tensor_list:
-        assert len(tensor) == N, "All tensors should have the same first dimension size"
+        assert len(
+            tensor) == N, "All tensors should have the same first dimension size"
 
     # concatenate tensors and record their sizes
     data = torch.cat([t.reshape(N, -1) for t in tensor_list], dim=-1)
@@ -162,7 +163,8 @@ def all_gather_tensor_list(world_size: int, tensor_list: List[Tensor]) -> List[T
     out_tensor_tuple = torch.split(collected, sizes, dim=-1)
     out_tensor_list = []
     for out_tensor, tensor in zip(out_tensor_tuple, tensor_list):
-        out_tensor = out_tensor.view(-1, *tensor.shape[1:])  # [N * world_size, *]
+        # [N * world_size, *]
+        out_tensor = out_tensor.view(-1, *tensor.shape[1:])
         out_tensor_list.append(out_tensor)
     return out_tensor_list
 
@@ -219,7 +221,8 @@ def all_to_all_tensor_list(
 
     N = len(tensor_list[0])
     for tensor in tensor_list:
-        assert len(tensor) == N, "All tensors should have the same first dimension size"
+        assert len(
+            tensor) == N, "All tensors should have the same first dimension size"
 
     assert (
         len(splits) == world_size
@@ -233,7 +236,8 @@ def all_to_all_tensor_list(
     if output_splits is not None:
         collected_splits = output_splits
     else:
-        collected_splits = all_to_all_int32(world_size, splits, device=data.device)
+        collected_splits = all_to_all_int32(
+            world_size, splits, device=data.device)
     collected = [
         torch.empty((l, *data.shape[1:]), dtype=data.dtype, device=data.device)
         for l in collected_splits
@@ -245,7 +249,8 @@ def all_to_all_tensor_list(
         distF.all_to_all(collected, data.split(splits, dim=0))
     else:
         # non-differentiable all_to_all
-        torch.distributed.all_to_all(collected, list(data.split(splits, dim=0)))
+        torch.distributed.all_to_all(
+            collected, list(data.split(splits, dim=0)))
     collected = torch.cat(collected, dim=0)
 
     # split the collected tensor and reshape to the original shape
@@ -322,7 +327,8 @@ def cli(fn: Callable, args: Any, verbose: bool = False) -> bool:
     assert torch.cuda.is_available(), "CUDA device is required!"
     if "OMPI_COMM_WORLD_SIZE" in os.environ:  # multi-node
         local_rank = int(os.environ["OMPI_COMM_WORLD_LOCAL_RANK"])
-        world_size = int(os.environ["OMPI_COMM_WORLD_SIZE"])  # dist.get_world_size()
+        # dist.get_world_size()
+        world_size = int(os.environ["OMPI_COMM_WORLD_SIZE"])
         world_rank = int(os.environ["OMPI_COMM_WORLD_RANK"])  # dist.get_rank()
         return _distributed_worker(
             world_rank, world_size, fn, args, local_rank, verbose

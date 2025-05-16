@@ -23,7 +23,7 @@ environment:
     - GLM_ARGUMENTS: -DGLM_TEST_ENABLE_SIMD_AVX=ON -DGLM_TEST_ENABLE_LANG_EXTENSIONS=ON -DGLM_TEST_ENABLE_CXX_17=ON
 
 matrix:
-    exclude:
+  exclude:
     - image: Visual Studio 2013
       GLM_ARGUMENTS: -DGLM_TEST_ENABLE_SIMD_AVX=ON -DGLM_TEST_ENABLE_LANG_EXTENSIONS=ON
     - image: Visual Studio 2013

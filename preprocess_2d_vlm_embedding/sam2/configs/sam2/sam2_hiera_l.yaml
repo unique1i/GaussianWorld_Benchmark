@@ -24,7 +24,7 @@ model:
         temperature: 10000
       d_model: 256
       backbone_channel_list: [1152, 576, 288, 144]
-      fpn_top_down_levels: [2, 3]  # output level 0 and 1 directly use the backbone features
+      fpn_top_down_levels: [2, 3] # output level 0 and 1 directly use the backbone features
       fpn_interp_model: nearest
 
   memory_attention:
@@ -61,29 +61,29 @@ model:
     num_layers: 4
 
   memory_encoder:
-      _target_: sam2.modeling.memory_encoder.MemoryEncoder
-      out_dim: 64
-      position_encoding:
-        _target_: sam2.modeling.position_encoding.PositionEmbeddingSine
-        num_pos_feats: 64
-        normalize: true
-        scale: null
-        temperature: 10000
-      mask_downsampler:
-        _target_: sam2.modeling.memory_encoder.MaskDownSampler
-        kernel_size: 3
-        stride: 2
-        padding: 1
-      fuser:
-        _target_: sam2.modeling.memory_encoder.Fuser
-        layer:
-          _target_: sam2.modeling.memory_encoder.CXBlock
-          dim: 256
-          kernel_size: 7
-          padding: 3
-          layer_scale_init_value: 1e-6
-          use_dwconv: True  # depth-wise convs
-        num_layers: 2
+    _target_: sam2.modeling.memory_encoder.MemoryEncoder
+    out_dim: 64
+    position_encoding:
+      _target_: sam2.modeling.position_encoding.PositionEmbeddingSine
+      num_pos_feats: 64
+      normalize: true
+      scale: null
+      temperature: 10000
+    mask_downsampler:
+      _target_: sam2.modeling.memory_encoder.MaskDownSampler
+      kernel_size: 3
+      stride: 2
+      padding: 1
+    fuser:
+      _target_: sam2.modeling.memory_encoder.Fuser
+      layer:
+        _target_: sam2.modeling.memory_encoder.CXBlock
+        dim: 256
+        kernel_size: 7
+        padding: 3
+        layer_scale_init_value: 1e-6
+        use_dwconv: True # depth-wise convs
+      num_layers: 2
 
   num_maskmem: 7
   image_size: 1024

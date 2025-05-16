@@ -55,7 +55,7 @@ If you want to contribute to the doc, here is the way to build it locally. The s
 ```bash
 pip install -e .[dev]
 pip install -r docs/requirements.txt
-sphinx-build docs/source _build 
+sphinx-build docs/source _build
 ```
 
 ## Clangd setup (for Neovim)
@@ -121,7 +121,7 @@ cmake .. -DCMAKE_EXPORT_COMPILE_COMMANDS=on
 cat compile_commands.json
 ```
 
-<!-- 
+<!--
 **Known issues**
 
 - The torch extensions include currently raises an error:

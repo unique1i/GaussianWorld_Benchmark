@@ -1,4 +1,3 @@
-
 # Process ScanNetpp Images to Language Features
 
 ## Clone the Repository
@@ -10,6 +9,7 @@ git clone git@github.com:RunyiYang/CLIP-SAM-process.git
 ## Download Checkpoints
 
 1. **Option 1: Download all SAM2 checkpoints (optional):**
+
    ```bash
    cd sam2/checkpoints
    ./download_ckpts.sh
@@ -17,6 +17,7 @@ git clone git@github.com:RunyiYang/CLIP-SAM-process.git
    ```
 
 2. **Option 2: Download only the required SAM2 checkpoint:**
+
    ```bash
    cd sam2/checkpoints
    wget https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_large.pt

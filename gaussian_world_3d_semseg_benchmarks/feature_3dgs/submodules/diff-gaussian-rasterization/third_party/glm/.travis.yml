@@ -368,8 +368,8 @@ jobs:
         - CMAKE_ENV="--parallel"
 
 before_script:
-    - cmake --version
-    - eval "${MATRIX_EVAL}"
+  - cmake --version
+  - eval "${MATRIX_EVAL}"
 
 script:
   - ${CC} --version
@@ -384,5 +384,3 @@ script:
   - cd ./build_test_cmake
   - cmake -DCMAKE_CXX_COMPILER=$COMPILER $TRAVIS_BUILD_DIR/test/cmake/ -DCMAKE_PREFIX_PATH=$TRAVIS_BUILD_DIR/install
   - cmake --build .
-
-
