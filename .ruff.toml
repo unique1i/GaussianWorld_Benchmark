@@ -1,9 +1,8 @@
-# .ruff.toml
 [lint]
-select   = ["E", "F", "I", "B"]       # keep same families
-ignore   = ["B006"]                  # turn off mutable-default check
-unfixable = ["B"]                    # don't try buggy auto-fixes
+select = ["E", "F", "I", "B"]   # keep your set
+ignore = ["E501"]               # drop line-length from “blocking” rules
 
 [lint.per-file-ignores]
-"**/__init__.py" = ["F401"]          # allow re-exports
+"**/__init__.py" = ["F401"]     # silence re-exports
+
 
