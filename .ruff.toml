@@ -1,11 +1,10 @@
-# .ruff.toml  – top-level keys only
-line-length = 88
-target-version = "py312"          # match your CI interpreter
-exclude = [".venv", ".git", "dist"]
-
+# .ruff.toml
 [lint]
-select = ["E", "F", "I", "B"]     # flake8-bugbear + default
-ignore = ["E501"]                 # don’t fail on long lines
+select   = ["E", "F", "I", "B"]       # keep same families
+ignore   = ["B006"]                  # turn off mutable-default check
+unfixable = ["B"]                    # don't try buggy auto-fixes
+max-line-length = 88                  # set maximum line length
 
-[format]
-quote-style = "double"
+[lint.per-file-ignores]
+"**/__init__.py" = ["F401"]          # allow re-exports
+
