@@ -6,6 +6,7 @@ import math
 import torch.nn.functional as F
 import clip
 import os
+
 os.environ["TORCH_MODEL_ZOO"] = "/tmp/torch/"
 os.environ["TORCH_HOME"] = "/tmp/torch/"
 
@@ -106,17 +107,22 @@ class Transpose(nn.Module):
 
 def forward_vit(pretrained, x, preresize=None):
     b, c, h, w = x.shape
-    
+
     # encoder
     # print(x.shape, "x.shape")
     # torch.Size([1, 3, 480, 480]) x.shape
     if preresize is not None:
         # preresize = [420, 420]  # 480/16*14
         # _x = torch.nn.functional.interpolate(x, size=preresize, mode="bilinear", align_corners=False)
-        _x = torch.nn.functional.interpolate(x, size=[int(h * preresize), int(w * preresize)], mode="bilinear", align_corners=False)
+        _x = torch.nn.functional.interpolate(
+            x,
+            size=[int(h * preresize), int(w * preresize)],
+            mode="bilinear",
+            align_corners=False,
+        )
         glob = pretrained.model.forward_flex(_x)
-        #print(_x.shape, "x.shape resize")
-        #torch.Size([1, 3, 336, 336]) x.shape resize
+        # print(_x.shape, "x.shape resize")
+        # torch.Size([1, 3, 336, 336]) x.shape resize
         # glob = pretrained.model.forward_flex(x)
     else:
         glob = pretrained.model.forward_flex(x)
@@ -127,10 +133,10 @@ def forward_vit(pretrained, x, preresize=None):
     layer_4 = pretrained.activations["4"]
     # print(x.shape)# torch.Size([1, 3, 480, 480])
 
-    #print(layer_1.shape)
-    #print(layer_2.shape)
-    #print(layer_3.shape)
-    #print(layer_4.shape)
+    # print(layer_1.shape)
+    # print(layer_2.shape)
+    # print(layer_3.shape)
+    # print(layer_4.shape)
 
     if layer_1.shape[0] != b:
         # maybe clip is used. LNC -> NLC
@@ -144,57 +150,65 @@ def forward_vit(pretrained, x, preresize=None):
     layer_3 = pretrained.act_postprocess3[0:2](layer_3)
     layer_4 = pretrained.act_postprocess4[0:2](layer_4)
 
-    #print(layer_1.shape)
-    #print(layer_2.shape)
-    #print(layer_3.shape)
-    #print(layer_4.shape)
+    # print(layer_1.shape)
+    # print(layer_2.shape)
+    # print(layer_3.shape)
+    # print(layer_4.shape)
     # base
-    #torch.Size([1, 901, 1024])
-    #torch.Size([1, 901, 1024])
-    #torch.Size([1, 901, 1024])
-    #torch.Size([1, 901, 1024])
-    #torch.Size([1, 1024, 900])
-    #torch.Size([1, 1024, 900])
-    #torch.Size([1, 1024, 900])
-    #torch.Size([1, 1024, 900])
-    #torch.Size([1, 1024, 900])
+    # torch.Size([1, 901, 1024])
+    # torch.Size([1, 901, 1024])
+    # torch.Size([1, 901, 1024])
+    # torch.Size([1, 901, 1024])
+    # torch.Size([1, 1024, 900])
+    # torch.Size([1, 1024, 900])
+    # torch.Size([1, 1024, 900])
+    # torch.Size([1, 1024, 900])
+    # torch.Size([1, 1024, 900])
 
     # clip
-    #torch.Size([577, 1, 1024])
-    #torch.Size([577, 1, 1024])
-    #torch.Size([577, 1, 1024])
-    #torch.Size([577, 1, 1024])
-    #torch.Size([1, 1024, 576])
-    #torch.Size([1, 1024, 576])
-    #torch.Size([1, 1024, 576])
-    #torch.Size([1, 1024, 576])
+    # torch.Size([577, 1, 1024])
+    # torch.Size([577, 1, 1024])
+    # torch.Size([577, 1, 1024])
+    # torch.Size([577, 1, 1024])
+    # torch.Size([1, 1024, 576])
+    # torch.Size([1, 1024, 576])
+    # torch.Size([1, 1024, 576])
+    # torch.Size([1, 1024, 576])
     # clip 420resize
-    #torch.Size([901, 1, 1024])
-    #torch.Size([901, 1, 1024])
-    #torch.Size([901, 1, 1024])
-    #torch.Size([901, 1, 1024])
-    #torch.Size([1, 1024, 900])
-    #torch.Size([1, 1024, 900])
-    #torch.Size([1, 1024, 900])
-    #torch.Size([1, 1024, 900])
-    
+    # torch.Size([901, 1, 1024])
+    # torch.Size([901, 1, 1024])
+    # torch.Size([901, 1, 1024])
+    # torch.Size([901, 1, 1024])
+    # torch.Size([1, 1024, 900])
+    # torch.Size([1, 1024, 900])
+    # torch.Size([1, 1024, 900])
+    # torch.Size([1, 1024, 900])
+
     unflatten = nn.Sequential(
         # nn.Unflatten(2, torch.Size([h // pretrained.model.patch_size[1], w // pretrained.model.patch_size[0],]),)
-        nn.Unflatten(2, torch.Size([h // 16, w // 16,]),)
+        nn.Unflatten(
+            2,
+            torch.Size(
+                [
+                    h // 16,
+                    w // 16,
+                ]
+            ),
+        )
     )
-    #print(layer_1.shape)
-    #print(h, w, pretrained.model.patch_size)
-    #print([h // pretrained.model.patch_size[1], w // pretrained.model.patch_size[0]])
+    # print(layer_1.shape)
+    # print(h, w, pretrained.model.patch_size)
+    # print([h // pretrained.model.patch_size[1], w // pretrained.model.patch_size[0]])
 
     # baseline
-    #torch.Size([1, 1024, 900])
-    #480 480 [16, 16]
-    #[30, 30]
+    # torch.Size([1, 1024, 900])
+    # 480 480 [16, 16]
+    # [30, 30]
 
     # clip 420
-    #torch.Size([1, 1024, 900])
-    #480 480 [14, 14]
-    #[34, 34]
+    # torch.Size([1, 1024, 900])
+    # 480 480 [14, 14]
+    # [34, 34]
 
     if layer_1.ndim == 3:
         layer_1 = unflatten(layer_1)
@@ -221,10 +235,12 @@ def _resize_pos_embed(self, posemb, gs_h, gs_w):
 
     gs_old = int(math.sqrt(len(posemb_grid)))
     # print(posemb.shape, gs_h, gs_w, gs_old, self.start_index, posemb_tok.shape, posemb_grid.shape)
-    #torch.Size([1, 577, 1024]) 30 30 24 1 torch.Size([1, 1, 1024]) torch.Size([576, 1024])
-    #torch.Size([1, 257, 1024]) 16 16 16 1 torch.Size([1, 1, 1024]) torch.Size([256, 1024])
+    # torch.Size([1, 577, 1024]) 30 30 24 1 torch.Size([1, 1, 1024]) torch.Size([576, 1024])
+    # torch.Size([1, 257, 1024]) 16 16 16 1 torch.Size([1, 1, 1024]) torch.Size([256, 1024])
     posemb_grid = posemb_grid.reshape(1, gs_old, gs_old, -1).permute(0, 3, 1, 2)
-    posemb_grid = F.interpolate(posemb_grid, size=(gs_h, gs_w), mode="bilinear", align_corners=False)
+    posemb_grid = F.interpolate(
+        posemb_grid, size=(gs_h, gs_w), mode="bilinear", align_corners=False
+    )
     posemb_grid = posemb_grid.permute(0, 2, 3, 1).reshape(1, gs_h * gs_w, -1)
 
     posemb = torch.cat([posemb_tok, posemb_grid], dim=1)
@@ -235,38 +251,40 @@ def _resize_pos_embed(self, posemb, gs_h, gs_w):
 def forward_flex_clip(self, x):
     b, c, h, w = x.shape
     # print(self)
-    #if hasattr(self, "pos_embed"):
+    # if hasattr(self, "pos_embed"):
     #    pos_embed = self._resize_pos_embed(
     #        self.pos_embed, h // self.patch_size[1], w // self.patch_size[0]
     #    )
-    #else:
+    # else:
     # CLIP applies first applies convlution before pos emb and patching. it reduces the width and height. (336->224)
-    #print(self.input_resolution, self.positional_embedding.shape, self.patch_size, h, w)
-    #224 torch.Size([257, 1024]) [14, 14] 336 336
+    # print(self.input_resolution, self.positional_embedding.shape, self.patch_size, h, w)
+    # 224 torch.Size([257, 1024]) [14, 14] 336 336
     pos_embed = self._resize_pos_embed(
-        self.positional_embedding[None], h // self.patch_size[1], w // self.patch_size[0]
+        self.positional_embedding[None],
+        h // self.patch_size[1],
+        w // self.patch_size[0],
     )
 
     B = x.shape[0]
     # print(pos_embed.shape, self.positional_embedding.shape) # torch.Size([1, 577, 1024]) torch.Size([257, 1024])
-    #print(x.shape)
-    #torch.Size([1, 257, 1024]) torch.Size([257, 1024])
-    #torch.Size([1, 3, 336, 336])
+    # print(x.shape)
+    # torch.Size([1, 257, 1024]) torch.Size([257, 1024])
+    # torch.Size([1, 3, 336, 336])
 
-    #torch.Size([1, 257, 1024]) 16 16 16 1 torch.Size([1, 1, 1024]) torch.Size([256, 1024])
-    #torch.Size([1, 257, 1024]) torch.Size([257, 1024])
-    #torch.Size([1, 3, 336, 336])
-    #torch.Size([1, 1024, 24, 24])
-    #torch.Size([1, 1024, 576])
-    #torch.Size([1, 576, 1024])
-    #torch.Size([1, 577, 1024]) after cat
-    #torch.Size([1, 577, 1024])
-    #torch.Size([1, 577, 1024]) after lnpre
-    #torch.Size([577, 1, 1024])
-    #torch.Size([577, 1, 1024]) aftertrans
-    #torch.Size([1, 577, 1024])
-    #torch.Size([1, 1024])
-    #torch.Size([1, 768]) out
+    # torch.Size([1, 257, 1024]) 16 16 16 1 torch.Size([1, 1, 1024]) torch.Size([256, 1024])
+    # torch.Size([1, 257, 1024]) torch.Size([257, 1024])
+    # torch.Size([1, 3, 336, 336])
+    # torch.Size([1, 1024, 24, 24])
+    # torch.Size([1, 1024, 576])
+    # torch.Size([1, 576, 1024])
+    # torch.Size([1, 577, 1024]) after cat
+    # torch.Size([1, 577, 1024])
+    # torch.Size([1, 577, 1024]) after lnpre
+    # torch.Size([577, 1, 1024])
+    # torch.Size([577, 1, 1024]) aftertrans
+    # torch.Size([1, 577, 1024])
+    # torch.Size([1, 1024])
+    # torch.Size([1, 768]) out
     # print(x.shape) # [1, 3, 336, 336]
     x = self.conv1(x)  # shape = [*, width, grid, grid]
     # print(x.shape) # [1, 1024, 24, 24]
@@ -274,7 +292,14 @@ def forward_flex_clip(self, x):
     # print(x.shape) # [1, 1024, 576]
     x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
     # print(x.shape) # [1, 576, 1024]
-    x = torch.cat([self.class_embedding.to(x.dtype) + torch.zeros(x.shape[0], 1, x.shape[-1], dtype=x.dtype, device=x.device), x], dim=1)  # shape = [*, grid ** 2 + 1, width]
+    x = torch.cat(
+        [
+            self.class_embedding.to(x.dtype)
+            + torch.zeros(x.shape[0], 1, x.shape[-1], dtype=x.dtype, device=x.device),
+            x,
+        ],
+        dim=1,
+    )  # shape = [*, grid ** 2 + 1, width]
     # print(x.shape, "after cat") # [1, 577, 1024]
     # x = x + self.positional_embedding.to(x.dtype)
     x = x + pos_embed
@@ -293,6 +318,8 @@ def forward_flex_clip(self, x):
         x = x @ self.proj
     # print(x.shape, "out")
     return x
+
+
 """
 
     if hasattr(self.patch_embed, "backbone"):
@@ -323,6 +350,7 @@ def forward_flex_clip(self, x):
 
     return x
 """
+
 
 def forward_flex(self, x):
     b, c, h, w = x.shape
@@ -333,7 +361,7 @@ def forward_flex(self, x):
     )
 
     B = x.shape[0]
-    
+
     if hasattr(self.patch_embed, "backbone"):
         x = self.patch_embed.backbone(x)
         if isinstance(x, (list, tuple)):
@@ -361,6 +389,7 @@ def forward_flex(self, x):
     x = self.norm(x)
 
     return x
+
 
 def get_readout_oper(vit_features, features, use_readout, start_index=1):
     if use_readout == "ignore":
@@ -378,11 +407,14 @@ def get_readout_oper(vit_features, features, use_readout, start_index=1):
 
     return readout_oper
 
+
 def _make_fullclip_vitl14_384(
     pretrained, use_readout="ignore", hooks=None, enable_attention_hooks=False
 ):
     # clip_pretrained, _ = clip.load("ViT-B/32", device='cuda', jit=False, download_root="/tmp/")
-    clip_pretrained, _ = clip.load("ViT-L/14", device='cuda', jit=False, download_root="/tmp/")
+    clip_pretrained, _ = clip.load(
+        "ViT-L/14", device="cuda", jit=False, download_root="/tmp/"
+    )
     clip_pretrained = clip_pretrained.float()
     model = timm.create_model("vit_large_patch16_384", pretrained=pretrained)
     hooks = [5, 11, 17, 23] if hooks == None else hooks
@@ -400,14 +432,17 @@ def _make_fullclip_vitl14_384(
     # TODO: resize at input (384->336) 384/16 = 336/14 = 20
     # return clip_pretrained
 
+
 def _make_pretrained_clip_vitl16_384(
     pretrained, use_readout="ignore", hooks=None, enable_attention_hooks=False
 ):
-    clip_pretrained, _ = clip.load("ViT-B/32", device='cuda', jit=False, download_root="/tmp/")
+    clip_pretrained, _ = clip.load(
+        "ViT-B/32", device="cuda", jit=False, download_root="/tmp/"
+    )
     model = timm.create_model("vit_large_patch16_384", pretrained=pretrained)
 
     hooks = [5, 11, 17, 23] if hooks == None else hooks
-    
+
     pretrained = _make_vit_b16_backbone(
         model,
         features=[256, 512, 1024, 1024],
@@ -422,11 +457,13 @@ def _make_pretrained_clip_vitl16_384(
 def _make_pretrained_clipRN50x16_vitl16_384(
     pretrained, use_readout="ignore", hooks=None, enable_attention_hooks=False
 ):
-    clip_pretrained, _ = clip.load("RN50x16", device='cuda', jit=False, download_root="/tmp/")
+    clip_pretrained, _ = clip.load(
+        "RN50x16", device="cuda", jit=False, download_root="/tmp/"
+    )
     model = timm.create_model("vit_large_patch16_384", pretrained=pretrained)
 
     hooks = [5, 11, 17, 23] if hooks == None else hooks
-    
+
     pretrained = _make_vit_b16_backbone(
         model,
         features=[256, 512, 1024, 1024],
@@ -438,16 +475,20 @@ def _make_pretrained_clipRN50x16_vitl16_384(
     return clip_pretrained, pretrained
 
 
-def _make_pretrained_clip_vitb32_384(pretrained, use_readout="ignore", hooks=None, enable_attention_hooks=False):
-    clip_pretrained, _ = clip.load("ViT-B/32", device='cuda', jit=False, download_root="/tmp/")
+def _make_pretrained_clip_vitb32_384(
+    pretrained, use_readout="ignore", hooks=None, enable_attention_hooks=False
+):
+    clip_pretrained, _ = clip.load(
+        "ViT-B/32", device="cuda", jit=False, download_root="/tmp/"
+    )
     model = timm.create_model("vit_base_patch32_384", pretrained=pretrained)
 
     hooks = [2, 5, 8, 11] if hooks == None else hooks
-    
+
     pretrained = _make_vit_b32_backbone(
-        model, 
-        features=[96, 192, 384, 768], 
-        hooks=hooks, 
+        model,
+        features=[96, 192, 384, 768],
+        hooks=hooks,
         use_readout=use_readout,
         enable_attention_hooks=False,
     )
@@ -465,7 +506,7 @@ def _make_vit_b32_backbone(
     enable_attention_hooks=False,
 ):
     pretrained = nn.Module()
-    
+
     pretrained.model = model
     pretrained.model.blocks[hooks[0]].register_forward_hook(get_activation("1"))
     pretrained.model.blocks[hooks[1]].register_forward_hook(get_activation("2"))
@@ -497,7 +538,15 @@ def _make_vit_b32_backbone(
     pretrained.act_postprocess1 = nn.Sequential(
         readout_oper[0],
         Transpose(1, 2),
-        nn.Unflatten(2, torch.Size([size[0] // pretrained.model.patch_size[1], size[1] // pretrained.model.patch_size[0]])),
+        nn.Unflatten(
+            2,
+            torch.Size(
+                [
+                    size[0] // pretrained.model.patch_size[1],
+                    size[1] // pretrained.model.patch_size[0],
+                ]
+            ),
+        ),
         nn.Conv2d(
             in_channels=vit_features,
             out_channels=features[0],
@@ -520,7 +569,15 @@ def _make_vit_b32_backbone(
     pretrained.act_postprocess2 = nn.Sequential(
         readout_oper[1],
         Transpose(1, 2),
-        nn.Unflatten(2, torch.Size([size[0] // pretrained.model.patch_size[1], size[1] // pretrained.model.patch_size[0]])),
+        nn.Unflatten(
+            2,
+            torch.Size(
+                [
+                    size[0] // pretrained.model.patch_size[1],
+                    size[1] // pretrained.model.patch_size[0],
+                ]
+            ),
+        ),
         nn.Conv2d(
             in_channels=vit_features,
             out_channels=features[1],
@@ -543,7 +600,15 @@ def _make_vit_b32_backbone(
     pretrained.act_postprocess3 = nn.Sequential(
         readout_oper[2],
         Transpose(1, 2),
-        nn.Unflatten(2, torch.Size([size[0] // pretrained.model.patch_size[1], size[1] // pretrained.model.patch_size[0]])),
+        nn.Unflatten(
+            2,
+            torch.Size(
+                [
+                    size[0] // pretrained.model.patch_size[1],
+                    size[1] // pretrained.model.patch_size[0],
+                ]
+            ),
+        ),
         nn.Conv2d(
             in_channels=vit_features,
             out_channels=features[2],
@@ -567,7 +632,15 @@ def _make_vit_b32_backbone(
     pretrained.act_postprocess4 = nn.Sequential(
         readout_oper[3],
         Transpose(1, 2),
-        nn.Unflatten(2, torch.Size([size[0] // pretrained.model.patch_size[1], size[1] // pretrained.model.patch_size[0]])),
+        nn.Unflatten(
+            2,
+            torch.Size(
+                [
+                    size[0] // pretrained.model.patch_size[1],
+                    size[1] // pretrained.model.patch_size[0],
+                ]
+            ),
+        ),
         nn.Conv2d(
             in_channels=vit_features,
             out_channels=features[3],
@@ -576,7 +649,7 @@ def _make_vit_b32_backbone(
             padding=0,
         ),
     )
-    
+
     # We inject this function into the VisionTransformer instances so that
     # we can use it with interpolated position embeddings without modifying the library source.
     pretrained.model.forward_flex = types.MethodType(forward_flex, pretrained.model)

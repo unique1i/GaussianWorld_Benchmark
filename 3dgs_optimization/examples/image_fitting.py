@@ -36,8 +36,7 @@ class SimpleTrainer:
         """Random gaussians"""
         bd = 2
 
-        self.means = bd * (torch.rand(self.num_points,
-                           3, device=self.device) - 0.5)
+        self.means = bd * (torch.rand(self.num_points, 3, device=self.device) - 0.5)
         self.scales = torch.rand(self.num_points, 3, device=self.device)
         d = 3
         self.rgbs = torch.rand(self.num_points, d, device=self.device)
@@ -122,8 +121,7 @@ class SimpleTrainer:
             print(f"Iteration {iter + 1}/{iterations}, Loss: {loss.item()}")
 
             if save_imgs and iter % 5 == 0:
-                frames.append(
-                    (out_img.detach().cpu().numpy() * 255).astype(np.uint8))
+                frames.append((out_img.detach().cpu().numpy() * 255).astype(np.uint8))
         if save_imgs:
             # save them as a gif with PIL
             frames = [Image.fromarray(frame) for frame in frames]
@@ -137,10 +135,9 @@ class SimpleTrainer:
                 duration=5,
                 loop=0,
             )
+        print(f"Total(s):\nRasterization: {times[0]:.3f}, Backward: {times[1]:.3f}")
         print(
-            f"Total(s):\nRasterization: {times[0]:.3f}, Backward: {times[1]:.3f}")
-        print(
-            f"Per step(s):\nRasterization: {times[0]/iterations:.5f}, Backward: {times[1]/iterations:.5f}"
+            f"Per step(s):\nRasterization: {times[0] / iterations:.5f}, Backward: {times[1] / iterations:.5f}"
         )
 
 
@@ -167,9 +164,8 @@ def main(
     else:
         gt_image = torch.ones((height, width, 3)) * 1.0
         # make top left and bottom right red, blue
-        gt_image[: height // 2, : width // 2,
-                 :] = torch.tensor([1.0, 0.0, 0.0])
-        gt_image[height // 2:, width // 2:, :] = torch.tensor([0.0, 0.0, 1.0])
+        gt_image[: height // 2, : width // 2, :] = torch.tensor([1.0, 0.0, 0.0])
+        gt_image[height // 2 :, width // 2 :, :] = torch.tensor([0.0, 0.0, 1.0])
 
     trainer = SimpleTrainer(gt_image=gt_image, num_points=num_points)
     trainer.train(

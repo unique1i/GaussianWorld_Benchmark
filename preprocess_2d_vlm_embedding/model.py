@@ -1,6 +1,5 @@
 from dataclasses import dataclass, field
 from typing import Tuple, Type
-import json
 import torchvision
 import torch
 import open_clip
@@ -27,11 +26,14 @@ class SigLIPNetwork(nn.Module):
         super().__init__()
         self.config = config
         self.model = AutoModel.from_pretrained(
-            self.config.clip_model_pretrained, torch_dtype=torch.float16, attn_implementation="flash_attention_2",
+            self.config.clip_model_pretrained,
+            torch_dtype=torch.float16,
+            attn_implementation="flash_attention_2",
         ).to("cuda")
         self.model.eval()
         self.processor = AutoProcessor.from_pretrained(
-            self.config.clip_model_pretrained, use_fast=True)
+            self.config.clip_model_pretrained, use_fast=True
+        )
         self.clip_n_dims = self.config.clip_n_dims
 
         self.positives = self.config.positives
@@ -63,7 +65,7 @@ class OpenCLIPNetwork:
             ]
         )
         self.clip_model_type = "ViT-B-16"
-        self.clip_model_pretrained = 'laion2b_s34b_b88k'
+        self.clip_model_pretrained = "laion2b_s34b_b88k"
         self.clip_n_dims = 512
         self.embedding_dim = 512
         model, _, _ = open_clip.create_model_and_transforms(
@@ -79,11 +81,13 @@ class OpenCLIPNetwork:
         self.negatives = ("object", "things", "stuff", "texture")
         self.positives = (" ",)
         with torch.no_grad():
-            tok_phrases = torch.cat([self.tokenizer(phrase)
-                                    for phrase in self.positives]).to(device)
+            tok_phrases = torch.cat(
+                [self.tokenizer(phrase) for phrase in self.positives]
+            ).to(device)
             self.pos_embeds = model.encode_text(tok_phrases)
-            tok_phrases = torch.cat([self.tokenizer(phrase)
-                                    for phrase in self.negatives]).to(device)
+            tok_phrases = torch.cat(
+                [self.tokenizer(phrase) for phrase in self.negatives]
+            ).to(device)
             self.neg_embeds = model.encode_text(tok_phrases)
         self.pos_embeds /= self.pos_embeds.norm(dim=-1, keepdim=True)
         self.neg_embeds /= self.neg_embeds.norm(dim=-1, keepdim=True)
@@ -94,16 +98,18 @@ class OpenCLIPNetwork:
         phrases_embeds = torch.cat([self.pos_embeds, self.neg_embeds], dim=0)
         p = phrases_embeds.to(embed.dtype)
         output = torch.mm(embed, p.T)
-        positive_vals = output[..., positive_id: positive_id + 1]
-        negative_vals = output[..., len(self.positives):]
+        positive_vals = output[..., positive_id : positive_id + 1]
+        negative_vals = output[..., len(self.positives) :]
         repeated_pos = positive_vals.repeat(1, len(self.negatives))
 
         sims = torch.stack((repeated_pos, negative_vals), dim=-1)
         softmax = torch.softmax(10 * sims, dim=-1)
         best_id = softmax[..., 0].argmin(dim=1)
-        return torch.gather(softmax, 1, best_id[..., None, None].expand(best_id.shape[0], len(self.negatives), 2))[
-            :, 0, :
-        ]
+        return torch.gather(
+            softmax,
+            1,
+            best_id[..., None, None].expand(best_id.shape[0], len(self.negatives), 2),
+        )[:, 0, :]
 
     def encode_image(self, input, mask=None):
         # check input type is unit8

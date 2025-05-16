@@ -2,13 +2,14 @@
 This script reads the original point cloud data from the ScanNet dataset and downsamples it using Open3D.
 """
 
-import os
 from pathlib import Path
 import open3d as o3d
 from tqdm import tqdm
 
-root_data_folder = [Path("/nvmestore/yli7/datasets/scannet/scans_test"), 
-                    Path("/nvmestore/yli7/datasets/scannet/scans")]
+root_data_folder = [
+    Path("/nvmestore/yli7/datasets/scannet/scans_test"),
+    Path("/nvmestore/yli7/datasets/scannet/scans"),
+]
 
 for root_data_folder in root_data_folder:
     if not root_data_folder.exists():
@@ -31,7 +32,8 @@ for root_data_folder in root_data_folder:
                 # Print the number of vertices after downsampling
                 num_vertices_after = len(downsampled_pcd.points)
                 print(
-                    f"Vertices before/after: {num_vertices_before} -> {num_vertices_after}")
+                    f"Vertices before/after: {num_vertices_before} -> {num_vertices_after}"
+                )
 
                 output_ply_file = scene_folder / "points3d.ply"
                 o3d.io.write_point_cloud(str(output_ply_file), downsampled_pcd)

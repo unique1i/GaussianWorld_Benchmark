@@ -318,9 +318,12 @@ class DefaultStrategy(Strategy):
             bbox_min = torch.tensor(self.init_bbox_min, device=means.device) - 1.0
             bbox_max = torch.tensor(self.init_bbox_max, device=means.device) + 1.0
             bbox_mask = (
-                (means[:, 0] >= bbox_min[0]) & (means[:, 0] <= bbox_max[0]) &
-                (means[:, 1] >= bbox_min[1]) & (means[:, 1] <= bbox_max[1]) &
-                (means[:, 2] >= bbox_min[2]) & (means[:, 2] <= bbox_max[2])
+                (means[:, 0] >= bbox_min[0])
+                & (means[:, 0] <= bbox_max[0])
+                & (means[:, 1] >= bbox_min[1])
+                & (means[:, 1] <= bbox_max[1])
+                & (means[:, 2] >= bbox_min[2])
+                & (means[:, 2] <= bbox_max[2])
             )
             bbox_mask = ~bbox_mask
             is_prune = torch.logical_or(is_prune, bbox_mask)

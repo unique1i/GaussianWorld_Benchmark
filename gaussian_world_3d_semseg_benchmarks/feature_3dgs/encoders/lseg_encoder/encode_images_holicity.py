@@ -2,42 +2,25 @@ import os
 import argparse
 import numpy as np
 from tqdm import tqdm
-from collections import OrderedDict
 import torch
 import torch.nn.functional as F
 from torch.utils import data
-import torchvision.transforms as transform
-from torch.nn.parallel.scatter_gather import gather
 import encoding.utils as utils
-from encoding.nn import SegmentationLosses, SyncBatchNorm
-from encoding.parallel import DataParallelModel, DataParallelCriterion
-from encoding.datasets import test_batchify_fn 
+from encoding.datasets import test_batchify_fn
 from encoding.models.sseg import BaseNet
 from modules.lseg_module import LSegModule
-#from utils import Resize
-from transforms_midas import Resize
-import cv2
-import math
-import types
-import functools
-import torchvision.transforms as torch_transforms
-import copy
-import itertools
+
+# from utils import Resize
 from PIL import Image
 import matplotlib.pyplot as plt
-import clip
-import matplotlib as mpl
-import matplotlib.colors as mplc
-import matplotlib.figure as mplfigure
 import matplotlib.patches as mpatches
-from matplotlib.backends.backend_agg import FigureCanvasAgg
-from data import get_dataset, get_original_dataset_pp, get_original_dataset
+from data import get_original_dataset
 from additional_utils.encoding_models import MultiEvalModule as LSeg_MultiEvalModule
-import torchvision.transforms as transforms
 import sklearn
 import sklearn.decomposition
 import time
-import json 
+
+
 class Options:
     def __init__(self):
         parser = argparse.ArgumentParser(description="PyTorch Segmentation")
@@ -145,7 +128,7 @@ class Options:
         )
         parser.add_argument(
             "--module",
-            default='lseg',
+            default="lseg",
             help="select model definition",
         )
         # test option
@@ -207,7 +190,7 @@ class Options:
         )
         parser.add_argument(
             "--activation",
-            choices=['lrelu', 'tanh'],
+            choices=["lrelu", "tanh"],
             default="lrelu",
             help="use which activation to activate the block",
         )
@@ -223,9 +206,7 @@ class Options:
             required=True,
         )
 
-        parser.add_argument(
-            "--resize-max", type=float, default=1.25, help=""
-        )
+        parser.add_argument("--resize-max", type=float, default=1.25, help="")
 
         self.parser = parser
 
@@ -235,24 +216,482 @@ class Options:
         print(args)
         return args
 
-adepallete = [0,0,0,120,120,120,180,120,120,6,230,230,80,50,50,4,200,3,120,120,80,140,140,140,204,5,255,230,230,230,4,250,7,224,5,255,235,255,7,150,5,61,120,120,70,8,255,51,255,6,82,143,255,140,204,255,4,255,51,7,204,70,3,0,102,200,61,230,250,255,6,51,11,102,255,255,7,71,255,9,224,9,7,230,220,220,220,255,9,92,112,9,255,8,255,214,7,255,224,255,184,6,10,255,71,255,41,10,7,255,255,224,255,8,102,8,255,255,61,6,255,194,7,255,122,8,0,255,20,255,8,41,255,5,153,6,51,255,235,12,255,160,150,20,0,163,255,140,140,140,250,10,15,20,255,0,31,255,0,255,31,0,255,224,0,153,255,0,0,0,255,255,71,0,0,235,255,0,173,255,31,0,255,11,200,200,255,82,0,0,255,245,0,61,255,0,255,112,0,255,133,255,0,0,255,163,0,255,102,0,194,255,0,0,143,255,51,255,0,0,82,255,0,255,41,0,255,173,10,0,255,173,255,0,0,255,153,255,92,0,255,0,255,255,0,245,255,0,102,255,173,0,255,0,20,255,184,184,0,31,255,0,255,61,0,71,255,255,0,204,0,255,194,0,255,82,0,10,255,0,112,255,51,0,255,0,194,255,0,122,255,0,255,163,255,153,0,0,255,10,255,112,0,143,255,0,82,0,255,163,255,0,255,235,0,8,184,170,133,0,255,0,255,92,184,0,255,255,0,31,0,184,255,0,214,255,255,0,112,92,255,0,0,224,255,112,224,255,70,184,160,163,0,255,153,0,255,71,255,0,255,0,163,255,204,0,255,0,143,0,255,235,133,255,0,255,0,235,245,0,255,255,0,122,255,245,0,10,190,212,214,255,0,0,204,255,20,0,255,255,255,0,0,153,255,0,41,255,0,255,204,41,0,255,41,255,0,173,0,255,0,245,255,71,0,255,122,0,255,0,255,184,0,92,255,184,255,0,0,133,255,255,214,0,25,194,194,102,255,0,92,0,255]
 
-    
-import matplotlib.patches as mpatches
+adepallete = [
+    0,
+    0,
+    0,
+    120,
+    120,
+    120,
+    180,
+    120,
+    120,
+    6,
+    230,
+    230,
+    80,
+    50,
+    50,
+    4,
+    200,
+    3,
+    120,
+    120,
+    80,
+    140,
+    140,
+    140,
+    204,
+    5,
+    255,
+    230,
+    230,
+    230,
+    4,
+    250,
+    7,
+    224,
+    5,
+    255,
+    235,
+    255,
+    7,
+    150,
+    5,
+    61,
+    120,
+    120,
+    70,
+    8,
+    255,
+    51,
+    255,
+    6,
+    82,
+    143,
+    255,
+    140,
+    204,
+    255,
+    4,
+    255,
+    51,
+    7,
+    204,
+    70,
+    3,
+    0,
+    102,
+    200,
+    61,
+    230,
+    250,
+    255,
+    6,
+    51,
+    11,
+    102,
+    255,
+    255,
+    7,
+    71,
+    255,
+    9,
+    224,
+    9,
+    7,
+    230,
+    220,
+    220,
+    220,
+    255,
+    9,
+    92,
+    112,
+    9,
+    255,
+    8,
+    255,
+    214,
+    7,
+    255,
+    224,
+    255,
+    184,
+    6,
+    10,
+    255,
+    71,
+    255,
+    41,
+    10,
+    7,
+    255,
+    255,
+    224,
+    255,
+    8,
+    102,
+    8,
+    255,
+    255,
+    61,
+    6,
+    255,
+    194,
+    7,
+    255,
+    122,
+    8,
+    0,
+    255,
+    20,
+    255,
+    8,
+    41,
+    255,
+    5,
+    153,
+    6,
+    51,
+    255,
+    235,
+    12,
+    255,
+    160,
+    150,
+    20,
+    0,
+    163,
+    255,
+    140,
+    140,
+    140,
+    250,
+    10,
+    15,
+    20,
+    255,
+    0,
+    31,
+    255,
+    0,
+    255,
+    31,
+    0,
+    255,
+    224,
+    0,
+    153,
+    255,
+    0,
+    0,
+    0,
+    255,
+    255,
+    71,
+    0,
+    0,
+    235,
+    255,
+    0,
+    173,
+    255,
+    31,
+    0,
+    255,
+    11,
+    200,
+    200,
+    255,
+    82,
+    0,
+    0,
+    255,
+    245,
+    0,
+    61,
+    255,
+    0,
+    255,
+    112,
+    0,
+    255,
+    133,
+    255,
+    0,
+    0,
+    255,
+    163,
+    0,
+    255,
+    102,
+    0,
+    194,
+    255,
+    0,
+    0,
+    143,
+    255,
+    51,
+    255,
+    0,
+    0,
+    82,
+    255,
+    0,
+    255,
+    41,
+    0,
+    255,
+    173,
+    10,
+    0,
+    255,
+    173,
+    255,
+    0,
+    0,
+    255,
+    153,
+    255,
+    92,
+    0,
+    255,
+    0,
+    255,
+    255,
+    0,
+    245,
+    255,
+    0,
+    102,
+    255,
+    173,
+    0,
+    255,
+    0,
+    20,
+    255,
+    184,
+    184,
+    0,
+    31,
+    255,
+    0,
+    255,
+    61,
+    0,
+    71,
+    255,
+    255,
+    0,
+    204,
+    0,
+    255,
+    194,
+    0,
+    255,
+    82,
+    0,
+    10,
+    255,
+    0,
+    112,
+    255,
+    51,
+    0,
+    255,
+    0,
+    194,
+    255,
+    0,
+    122,
+    255,
+    0,
+    255,
+    163,
+    255,
+    153,
+    0,
+    0,
+    255,
+    10,
+    255,
+    112,
+    0,
+    143,
+    255,
+    0,
+    82,
+    0,
+    255,
+    163,
+    255,
+    0,
+    255,
+    235,
+    0,
+    8,
+    184,
+    170,
+    133,
+    0,
+    255,
+    0,
+    255,
+    92,
+    184,
+    0,
+    255,
+    255,
+    0,
+    31,
+    0,
+    184,
+    255,
+    0,
+    214,
+    255,
+    255,
+    0,
+    112,
+    92,
+    255,
+    0,
+    0,
+    224,
+    255,
+    112,
+    224,
+    255,
+    70,
+    184,
+    160,
+    163,
+    0,
+    255,
+    153,
+    0,
+    255,
+    71,
+    255,
+    0,
+    255,
+    0,
+    163,
+    255,
+    204,
+    0,
+    255,
+    0,
+    143,
+    0,
+    255,
+    235,
+    133,
+    255,
+    0,
+    255,
+    0,
+    235,
+    245,
+    0,
+    255,
+    255,
+    0,
+    122,
+    255,
+    245,
+    0,
+    10,
+    190,
+    212,
+    214,
+    255,
+    0,
+    0,
+    204,
+    255,
+    20,
+    0,
+    255,
+    255,
+    255,
+    0,
+    0,
+    153,
+    255,
+    0,
+    41,
+    255,
+    0,
+    255,
+    204,
+    41,
+    0,
+    255,
+    41,
+    255,
+    0,
+    173,
+    0,
+    255,
+    0,
+    245,
+    255,
+    71,
+    0,
+    255,
+    122,
+    0,
+    255,
+    0,
+    255,
+    184,
+    0,
+    92,
+    255,
+    184,
+    255,
+    0,
+    0,
+    133,
+    255,
+    255,
+    214,
+    0,
+    25,
+    194,
+    194,
+    102,
+    255,
+    0,
+    92,
+    0,
+    255,
+]
+
+
 def get_legend_patch(npimg, new_palette, labels):
-    out_img = Image.fromarray(npimg.squeeze().astype('uint8'))
+    out_img = Image.fromarray(npimg.squeeze().astype("uint8"))
     out_img.putpalette(new_palette)
     u_index = np.unique(npimg)
     patches = []
     for i, index in enumerate(u_index):
         label = labels[index]
-        cur_color = [new_palette[index * 3] / 255.0, new_palette[index * 3 + 1] / 255.0, new_palette[index * 3 + 2] / 255.0]
+        cur_color = [
+            new_palette[index * 3] / 255.0,
+            new_palette[index * 3 + 1] / 255.0,
+            new_palette[index * 3 + 2] / 255.0,
+        ]
         red_patch = mpatches.Patch(color=cur_color, label=label)
         patches.append(red_patch)
     return out_img, patches
 
-def test(args):
 
+def test(args):
     module = LSegModule.load_from_checkpoint(
         checkpoint_path=args.weights,
         data_path=args.data_path,
@@ -279,33 +718,32 @@ def test(args):
         block_depth=args.block_depth,
         activation=args.activation,
     )
-    labels = module.get_labels('ade20k')
+    labels = module.get_labels("ade20k")
     input_transform = module.val_transform
     # num_classes = module.num_classes
     num_classes = len(labels)
-    #labels.append("petal")
-    #labels.append("leaf")
-    #num_classes += 2
-
+    # labels.append("petal")
+    # labels.append("leaf")
+    # num_classes += 2
 
     # selected_json = args.selected_frames_path
     # with open(selected_json, 'r') as f:
     #     selected_data_list = json.load(f)
     # selected_frames = selected_data_list['frames']
     # selected_imgs_list = [frame_i['file_path'] for frame_i in selected_frames]
-    
+
     # dataset
     print("test rgb dir", args.test_rgb_dir)
     # testset = get_dataset(
     testset = get_original_dataset(
         # "/mnt/nfs-mnj-archive-02/user/sosk/neural_semantic_field/semantic_nerf/Replica_Dataset/room_0/Sequence_1/rgb",
-        #"/mnt/nfs-mnj-archive-02/user/sosk/neural_semantic_field/semantic_nerf/Replica_Dataset/office_0/Sequence_1/rgb",
-        #"/mnt/nfs-mnj-hot-01/tmp/sosk/neural_semantic_field/semantic_nerf/Replica_Dataset/office_0/Sequence_1/rgb",
+        # "/mnt/nfs-mnj-archive-02/user/sosk/neural_semantic_field/semantic_nerf/Replica_Dataset/office_0/Sequence_1/rgb",
+        # "/mnt/nfs-mnj-hot-01/tmp/sosk/neural_semantic_field/semantic_nerf/Replica_Dataset/office_0/Sequence_1/rgb",
         args.test_rgb_dir,
-        #args.dataset,
-        #root=args.data_path,
-        #split="val",
-        #mode="testval" if args.eval else "test",  # test returns (image, path), the others returns (image, GTmask)
+        # args.dataset,
+        # root=args.data_path,
+        # split="val",
+        # mode="testval" if args.eval else "test",  # test returns (image, path), the others returns (image, GTmask)
         transform=input_transform,
     )
 
@@ -319,7 +757,7 @@ def test(args):
         drop_last=False,
         shuffle=False,
         collate_fn=test_batchify_fn,
-        **loader_kwargs
+        **loader_kwargs,
     )
 
     if isinstance(module.net, BaseNet):
@@ -379,7 +817,7 @@ def test(args):
         total_num = 900
         step = 5
         train_ids = list(range(0, total_num, step))
-        test_ids = [x+step//2 for x in train_ids]
+        test_ids = [x + step // 2 for x in train_ids]
         assert len(testset) == total_num, (len(testset), total_num)
         assert args.test_batch_size == 1, args.test_batch_size
 
@@ -408,7 +846,7 @@ def test(args):
         with torch.no_grad():
             print(image[0].shape, "image.shape -")
             # print([im.shape for im in image]) # [torch.Size([3, 1438, 1918])]
-            #if image[0].shape[-1] > 1008:
+            # if image[0].shape[-1] > 1008:
             #    scale_factor = 1008 / image[0].shape[-1]
             if image[0].shape[-1] > w:
                 # scale_factor = w / image[0].shape[-1]
@@ -422,7 +860,9 @@ def test(args):
                         # scale_factor=scale_factor,
                         mode="bilinear",
                         align_corners=True,
-                    )[0] for img in image]
+                    )[0]
+                    for img in image
+                ]
                 print(image[0].shape)
             outputs = evaluator.parallel_forward(image)
             print(image[0].shape, "image.shape")
@@ -445,19 +885,23 @@ def test(args):
         for predict, impath, img, fmap in zip(predicts, dst, image, output_features):
             # prediction mask
             # mask = utils.get_mask_pallete(predict - 1, args.dataset)
-            mask = utils.get_mask_pallete(predict - 1, 'detail') # mask pallete is color code
+            mask = utils.get_mask_pallete(
+                predict - 1, "detail"
+            )  # mask pallete is color code
             outname = os.path.splitext(impath)[0] + ".png"
             mask.save(os.path.join(outdir, outname))
 
             # vis from accumulation of prediction
             mask = torch.tensor(np.array(mask.convert("RGB"), "f")) / 255.0
-            vis_img = (img + 1) / 2.
+            vis_img = (img + 1) / 2.0
             vis_img = vis_img.permute(1, 2, 0)  # ->hwc
             vis1 = vis_img
             vis2 = vis_img * 0.4 + mask * 0.6
             vis3 = mask
             vis = torch.cat([vis1, vis2, vis3], dim=1)
-            Image.fromarray((vis.cpu().numpy() * 255).astype(np.uint8)).save(os.path.join(outdir, outname + "_vis.png"))
+            Image.fromarray((vis.cpu().numpy() * 255).astype(np.uint8)).save(
+                os.path.join(outdir, outname + "_vis.png")
+            )
 
             # new_palette = get_new_pallete(len(labels))
             # seg, patches = get_new_mask_pallete(predict, new_palette, labels=labels)
@@ -465,65 +909,102 @@ def test(args):
             seg, patches = get_legend_patch(predict - 1, adepallete, labels)
             seg = seg.convert("RGBA")
             plt.figure()
-            plt.axis('off')
+            plt.axis("off")
             plt.imshow(seg)
-            #plt.legend(handles=patches)
-            plt.legend(handles=patches, prop={'size': 8}, ncol=4)
-            plt.savefig(os.path.join(outdir, outname + "_legend.png"), format="png", dpi=300, bbox_inches="tight")
+            # plt.legend(handles=patches)
+            plt.legend(handles=patches, prop={"size": 8}, ncol=4)
+            plt.savefig(
+                os.path.join(outdir, outname + "_legend.png"),
+                format="png",
+                dpi=300,
+                bbox_inches="tight",
+            )
             plt.clf()
             plt.close()
 
             ###############################
             # print(fmap.shape)  # torch.Size([1, 512, 512, 683])
-            #print(fmap.shape, h, w)
+            # print(fmap.shape, h, w)
             start = time.time()
             ###
             # save unnormalized image feature
             unnormalized_fmap = fmap[0]  # [512, h, w]
             unnormalized_fmap = unnormalized_fmap.cpu().numpy().astype(np.float16)
-            torch.save(torch.tensor(unnormalized_fmap).half(), os.path.join(outdir, os.path.splitext(impath)[0] + "_fmap_CxHxW.pt"))
+            torch.save(
+                torch.tensor(unnormalized_fmap).half(),
+                os.path.join(outdir, os.path.splitext(impath)[0] + "_fmap_CxHxW.pt"),
+            )
 
-            fmap = F.interpolate(fmap, size=(h, w), mode='bilinear', align_corners=False)  # [1, 512, h, w]
+            fmap = F.interpolate(
+                fmap, size=(h, w), mode="bilinear", align_corners=False
+            )  # [1, 512, h, w]
             fmap = F.normalize(fmap, dim=1)  # normalize
-            #print(time.time() - start)
-            #print("done interpolate")
+            # print(time.time() - start)
+            # print("done interpolate")
 
             if pca is None:
                 print("calculate PCA based on 1st image", impath)
                 pca = sklearn.decomposition.PCA(3, random_state=42)
-                f_samples = fmap.permute(0, 2, 3, 1).reshape(-1, fmap.shape[1])[::3].cpu().numpy()
+                f_samples = (
+                    fmap.permute(0, 2, 3, 1)
+                    .reshape(-1, fmap.shape[1])[::3]
+                    .cpu()
+                    .numpy()
+                )
                 transformed = pca.fit_transform(f_samples)
                 print(pca)
-                print("pca.explained_variance_ratio_", pca.explained_variance_ratio_.tolist())
+                print(
+                    "pca.explained_variance_ratio_",
+                    pca.explained_variance_ratio_.tolist(),
+                )
                 print("pca.singular_values_", pca.singular_values_.tolist())
                 feature_pca_mean = torch.tensor(f_samples.mean(0)).float().cuda()
                 feature_pca_components = torch.tensor(pca.components_).float().cuda()
                 q1, q99 = np.percentile(transformed, [1, 99])
                 feature_pca_postprocess_sub = q1
-                feature_pca_postprocess_div = (q99 - q1)
+                feature_pca_postprocess_div = q99 - q1
                 print(q1, q99)
                 del f_samples
-                torch.save({"pca": pca, "feature_pca_mean": feature_pca_mean, "feature_pca_components": feature_pca_components,
-                            "feature_pca_postprocess_sub": feature_pca_postprocess_sub, "feature_pca_postprocess_div": feature_pca_postprocess_div},
-                           os.path.join(outdir, "pca_dict.pt"))
+                torch.save(
+                    {
+                        "pca": pca,
+                        "feature_pca_mean": feature_pca_mean,
+                        "feature_pca_components": feature_pca_components,
+                        "feature_pca_postprocess_sub": feature_pca_postprocess_sub,
+                        "feature_pca_postprocess_div": feature_pca_postprocess_div,
+                    },
+                    os.path.join(outdir, "pca_dict.pt"),
+                )
 
-            #print("start imgsave")
+            # print("start imgsave")
             start = time.time()
-            vis_feature = (fmap.permute(0, 2, 3, 1).reshape(-1, fmap.shape[1]) - feature_pca_mean[None, :]) @ feature_pca_components.T
-            vis_feature = (vis_feature - feature_pca_postprocess_sub) / feature_pca_postprocess_div
-            vis_feature = vis_feature.clamp(0.0, 1.0).float().reshape((fmap.shape[2], fmap.shape[3], 3)).cpu()
-            Image.fromarray((vis_feature.cpu().numpy() * 255).astype(np.uint8)).save(os.path.join(outdir, outname + "_feature_vis.png"))
-            #print(time.time() - start)
-            #print("done imgsave")
+            vis_feature = (
+                fmap.permute(0, 2, 3, 1).reshape(-1, fmap.shape[1])
+                - feature_pca_mean[None, :]
+            ) @ feature_pca_components.T
+            vis_feature = (
+                vis_feature - feature_pca_postprocess_sub
+            ) / feature_pca_postprocess_div
+            vis_feature = (
+                vis_feature.clamp(0.0, 1.0)
+                .float()
+                .reshape((fmap.shape[2], fmap.shape[3], 3))
+                .cpu()
+            )
+            Image.fromarray((vis_feature.cpu().numpy() * 255).astype(np.uint8)).save(
+                os.path.join(outdir, outname + "_feature_vis.png")
+            )
+            # print(time.time() - start)
+            # print("done imgsave")
 
             fmap = fmap[0]  # [512, h, w]
             fmap = fmap.cpu().numpy().astype(np.float16)
             # np.save(os.path.join(outdir, os.path.splitext(impath)[0] + "_fmap__ori_w{}xh{}.npy".format(w, h)), fmap)
-            #print("start savez")
-            #start = time.time()
-            #np.savez_compressed(os.path.join(outdir, os.path.splitext(impath)[0] + "_fmap__ori_w{}xh{}.npz".format(w, h)), fmap)  # 70% filesize
-            #print(time.time() - start)
-            #print("done savez")
+            # print("start savez")
+            # start = time.time()
+            # np.savez_compressed(os.path.join(outdir, os.path.splitext(impath)[0] + "_fmap__ori_w{}xh{}.npz".format(w, h)), fmap)  # 70% filesize
+            # print(time.time() - start)
+            # print("done savez")
             print("start save")
             start = time.time()
             # np.save(os.path.join(outdir, os.path.splitext(impath)[0] + "_fmap__ori_w{}xh{}.npy".format(w, h)), fmap)
@@ -531,7 +1012,6 @@ def test(args):
             # torch.save(torch.tensor(fmap).half(), os.path.join(outdir, os.path.splitext(impath)[0] + "_fmap_CxHxW.pt"))
             print(time.time() - start)
             # print("done save")
- 
 
 
 class ReturnFirstClosure(object):
@@ -549,15 +1029,14 @@ class ReturnFirstClosure(object):
 if __name__ == "__main__":
     args = Options().parse()
     torch.manual_seed(args.seed)
-    args.test_batch_size = torch.cuda.device_count() 
+    args.test_batch_size = torch.cuda.device_count()
 
-    data_root_path = '/holicity_val_set_suite/original_data/'
-    split_path = '/splits/holicity_mini_val.txt'
+    data_root_path = "/holicity_val_set_suite/original_data/"
+    split_path = "/splits/holicity_mini_val.txt"
     val_split = np.loadtxt(split_path, dtype=str)
 
-
     for val_i in val_split:
-        #print("val_i", val_i)
+        # print("val_i", val_i)
         args.test_rgb_dir = os.path.join(data_root_path, val_i, "image")
         args.outdir = os.path.join(data_root_path, val_i, "rgb_feature_langseg")
         test(args)

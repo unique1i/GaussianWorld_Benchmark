@@ -20,8 +20,9 @@ def move_npy_files(base_dir=".", dry_run=True):
         print(f"Data directory not found: {data_dir}")
         return
 
-    scene_dirs = [d for d in os.listdir(data_dir) 
-                  if os.path.isdir(os.path.join(data_dir, d))]
+    scene_dirs = [
+        d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d))
+    ]
 
     for scene in scene_dirs:
         scene_img_dir = os.path.join(data_dir, scene, "dslr", "undistorted_images")
@@ -59,21 +60,22 @@ def move_npy_files(base_dir=".", dry_run=True):
 
 def copy_json_files(base_dir=".", dry_run=True):
     """
-    Iterate over scene folders in `data/` and look for 
+    Iterate over scene folders in `data/` and look for
     'dslr/nerfstudio/lang_feat_selected_imgs.json'.
     Copy the JSON file (if found) to scene-specific subdirectories under `language_features/`.
 
     """
-    data_dir = os.path.join(base_dir, "data") # 'data' and 'sem_test'
-    lang_feat_dir = os.path.join(base_dir, "language_features_siglip2_w_highlight_mainly_crop_w_bg")
+    data_dir = os.path.join(base_dir, "data")  # 'data' and 'sem_test'
+    lang_feat_dir = os.path.join(
+        base_dir, "language_features_siglip2_w_highlight_mainly_crop_w_bg"
+    )
 
     if not os.path.exists(data_dir):
         print(f"Data directory not found: {data_dir}")
         return
 
     scene_dirs = [
-        d for d in os.listdir(data_dir)
-        if os.path.isdir(os.path.join(data_dir, d))
+        d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d))
     ]
 
     for scene in scene_dirs:
@@ -82,15 +84,20 @@ def copy_json_files(base_dir=".", dry_run=True):
 
         if os.path.exists(json_file):
             dest_scene_dir = os.path.join(lang_feat_dir, scene)
-            dest_json_file = os.path.join(dest_scene_dir, "lang_feat_selected_imgs.json")
+            dest_json_file = os.path.join(
+                dest_scene_dir, "lang_feat_selected_imgs.json"
+            )
 
             if dry_run:
-                print(f"[dry_run] Would create folder (if not exists): {dest_scene_dir}")
+                print(
+                    f"[dry_run] Would create folder (if not exists): {dest_scene_dir}"
+                )
                 print(f"[dry_run] Would copy {json_file} --> {dest_json_file}")
             else:
                 os.makedirs(dest_scene_dir, exist_ok=True)
                 shutil.copy2(json_file, dest_json_file)
                 print(f"Copied {json_file} --> {dest_json_file}")
+
 
 if __name__ == "__main__":
     # Set dry_run=True to test the script without moving files.

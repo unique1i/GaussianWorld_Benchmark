@@ -4,7 +4,6 @@ import torch
 from plyfile import PlyData
 from scipy.spatial import cKDTree as KDTree
 
-import open_clip
 from tqdm import tqdm
 
 ###################################
@@ -116,13 +115,15 @@ def main():
     # ------------------------------
     val_split_path = "/home/yli7/scratch2/datasets/scannetpp_v1/splits/nvs_sem_val.txt"
     val_split_path = "temp.txt"
-    scannetpp_preprocessed_root = "/home/yli7/scratch2/datasets/ptv3_preprocessed/scannetpp_v1_preprocessed"
+    scannetpp_preprocessed_root = (
+        "/home/yli7/scratch2/datasets/ptv3_preprocessed/scannetpp_v1_preprocessed"
+    )
 
     # 3DGS data and language features
-    scannetpp_3dgs_root = "/home/yli7/scratch2/datasets/gaussian_world/scannetpp_v1_mcmc_3dgs"
-    scannetpp_langfeat_root = (
-        "/home/yli7/scratch2/datasets/gaussian_world/scannetpp_v1_mcmc_3dgs/language_features"
+    scannetpp_3dgs_root = (
+        "/home/yli7/scratch2/datasets/gaussian_world/scannetpp_v1_mcmc_3dgs"
     )
+    scannetpp_langfeat_root = "/home/yli7/scratch2/datasets/gaussian_world/scannetpp_v1_mcmc_3dgs/language_features"
 
     # top-100 classes text file
     text_path = "/home/yli7/scratch2/datasets/scannetpp_v1/metadata/semantic_benchmark/top100.txt"
@@ -148,7 +149,9 @@ def main():
 
     CROP_SIZE = 512
     siglip_spec = "siglip-base-patch16-512"
-    model = AutoModel.from_pretrained(f"google/{siglip_spec}") # siglip-so400m-patch14-384, siglip-base-patch16-224, siglip-base-patch16-384
+    model = AutoModel.from_pretrained(
+        f"google/{siglip_spec}"
+    )  # siglip-so400m-patch14-384, siglip-base-patch16-224, siglip-base-patch16-384
     tokenizer = AutoTokenizer.from_pretrained(f"google/{siglip_spec}")
     model = model.eval().to(device)
 
@@ -186,7 +189,9 @@ def main():
     # ------------------------------
     # 3) Prepare confusion matrix
     # ------------------------------
-    confusion_mat = np.zeros((num_classes, num_classes), dtype=np.int64) # used to log our predictions for each class
+    confusion_mat = np.zeros(
+        (num_classes, num_classes), dtype=np.int64
+    )  # used to log our predictions for each class
 
     # ------------------------------
     # 4) Loop over scenes
@@ -291,7 +296,9 @@ def main():
 
     # (c) Mean IoU (mIoU) over all present classes
     present_classes = [c for c in range(num_classes) if present_mask[c]]
-    mean_iou = np.mean([ious[c] for c in present_classes]) if len(present_classes) > 0 else 0.0
+    mean_iou = (
+        np.mean([ious[c] for c in present_classes]) if len(present_classes) > 0 else 0.0
+    )
 
     # (d) Frequency-weighted IoU (fIoU) over all present classes
     #     freq_c = (# of GT samples in class c) / (total # of GT samples)
@@ -299,7 +306,7 @@ def main():
     total_gt = 0
     for c in range(num_classes):
         # ground-truth count for class c includes confusion_mat[c, :].sum() + fn_ignore[c]
-        total_gt += (np.sum(confusion_mat[c, :]) + fn_ignore[c])
+        total_gt += np.sum(confusion_mat[c, :]) + fn_ignore[c]
 
     fiou = 0.0
     if total_gt > 0:
@@ -310,17 +317,18 @@ def main():
 
     # (e) Excluding certain classes from the metrics
     included_indices = [
-        c for c in range(num_classes) 
-        if present_mask[c] and (c not in excluded_indices)
+        c for c in range(num_classes) if present_mask[c] and (c not in excluded_indices)
     ]
     mean_iou_excl = (
-        np.mean([ious[c] for c in included_indices]) if len(included_indices) > 0 else 0.0
+        np.mean([ious[c] for c in included_indices])
+        if len(included_indices) > 0
+        else 0.0
     )
 
     # Frequency-weighted IoU ignoring excluded classes
     total_gt_incl = 0
     for c in included_indices:
-        total_gt_incl += (np.sum(confusion_mat[c, :]) + fn_ignore[c])
+        total_gt_incl += np.sum(confusion_mat[c, :]) + fn_ignore[c]
 
     fiou_excl = 0.0
     if total_gt_incl > 0:
@@ -347,7 +355,9 @@ def main():
     # ------------------------------
     print("\n======== RESULTS ========")
     print("Present classes:", [top100_label_init[c] for c in present_classes])
-    missing_classes = [top100_label_init[i] for i in range(num_classes) if not present_mask[i]]
+    missing_classes = [
+        top100_label_init[i] for i in range(num_classes) if not present_mask[i]
+    ]
     print("Missing classes:", missing_classes)
     print("\n--- Per-class IoU (all classes) ---")
     for c in range(num_classes):

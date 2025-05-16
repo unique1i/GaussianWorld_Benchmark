@@ -6,20 +6,21 @@ import sys
 import argparse
 import open_clip
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/..") # noqa
+sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/..")  # noqa
 
 from tqdm import tqdm
 from plyfile import PlyData
 from scipy.spatial import cKDTree as KDTree
 from metadata.matterport3d import MATTERPORT_LABELS_21, MATTERPORT_LABELS_160
-from pathlib import Path
 from transformers import AutoModel, AutoTokenizer
+
 
 def load_scene_list(val_split_path):
     with open(val_split_path, "r") as f:
         lines = f.readlines()
     scene_ids = [line.strip() for line in lines if line.strip()]
     return scene_ids
+
 
 def read_ply_file_3dgs(file_path):
     ply_data = PlyData.read(file_path)
@@ -31,12 +32,15 @@ def read_ply_file_3dgs(file_path):
     xyz = np.stack([x, y, z], axis=-1)
     return xyz, opacity
 
+
 @torch.no_grad()
-def compute_relevancy_scores(lang_feat: torch.Tensor, 
-                             text_feat: torch.Tensor,
-                             device: torch.device,
-                             bench_name: str = "",
-                             use_clip=True):
+def compute_relevancy_scores(
+    lang_feat: torch.Tensor,
+    text_feat: torch.Tensor,
+    device: torch.device,
+    bench_name: str = "",
+    use_clip=True,
+):
     lang_feat = lang_feat.to(device, non_blocking=True)
     text_feat = text_feat.to(device, non_blocking=True)
 
@@ -46,26 +50,28 @@ def compute_relevancy_scores(lang_feat: torch.Tensor,
     else:
         probs = torch.sigmoid(logits)  # (N, C)
     top1_probs, top1_indices = torch.topk(probs, k=1, dim=1)  # (N, 1)
-    mask = top1_probs[:, 0] > 0.
-    top1_indices[~mask] = -1 # if lang_feat is all zeros
+    mask = top1_probs[:, 0] > 0.0
+    top1_indices[~mask] = -1  # if lang_feat is all zeros
     # if bench_name == "scannet20":
     #     top1_indices[~mask] = -1 # use "other" class
     # else:
     #     top1_indices[~mask] = -1  # Use -1 as ignore index
     return top1_indices.cpu().numpy()
 
+
 def save_results_to_file(log_path, results_str, args):
     """Save the results to a text file with relevant parameters in the filename."""
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
-    
-    with open(log_path, 'w') as f:
+
+    with open(log_path, "w") as f:
         f.write("Command line arguments:\n")
         for arg, value in vars(args).items():
             f.write(f"{arg}: {value}\n")
         f.write("\n")
         f.write(results_str)
-    
+
     print(f"\nResults saved to: {log_path}")
+
 
 def main():
     argparser = argparse.ArgumentParser()
@@ -75,41 +81,62 @@ def main():
     argparser.add_argument("--nn_num", type=int)
     argparser.add_argument("--langfeat_root", type=str)
     argparser.add_argument("--print_class_iou", action="store_true")
-    argparser.add_argument("--ignore_classes", nargs='+', default=["wall", "floor", "ceiling"])
+    argparser.add_argument(
+        "--ignore_classes", nargs="+", default=["wall", "floor", "ceiling"]
+    )
     argparser.add_argument("--model_spec", type=str, default="siglip2-base-patch16-512")
-    argparser.add_argument("--save_pred", action="store_true", help="Save predictions for all coord as <scene_id>_<benchmark>_semseg_pred.npy")
-    argparser.add_argument("--model_name", type=str, default="clip", choices=["clip", "siglip2"])
+    argparser.add_argument(
+        "--save_pred",
+        action="store_true",
+        help="Save predictions for all coord as <scene_id>_<benchmark>_semseg_pred.npy",
+    )
+    argparser.add_argument(
+        "--model_name", type=str, default="clip", choices=["clip", "siglip2"]
+    )
     args = argparser.parse_args()
 
-    val_split_path = args.val_split_path or       "/home/yli7/projects/yue/language_feat_exps/splits/matterport3d_mini_test.txt"
-    preprocessed_root = args.preprocessed_root or "/home/yli7/scratch2/datasets/ptv3_preprocessed/matterport3d"
-    gs_root = args.gs_root or                     "/home/yli7/scratch/datasets/gaussian_world/outputs/ludvig/matterport3d" 
-    langfeat_root = args.langfeat_root or         "/home/yli7/scratch/datasets/gaussian_world/outputs/ludvig/matterport3d"
+    val_split_path = (
+        args.val_split_path
+        or "/home/yli7/projects/yue/language_feat_exps/splits/matterport3d_mini_test.txt"
+    )
+    preprocessed_root = (
+        args.preprocessed_root
+        or "/home/yli7/scratch2/datasets/ptv3_preprocessed/matterport3d"
+    )
+    gs_root = (
+        args.gs_root
+        or "/home/yli7/scratch/datasets/gaussian_world/outputs/ludvig/matterport3d"
+    )
+    langfeat_root = (
+        args.langfeat_root
+        or "/home/yli7/scratch/datasets/gaussian_world/outputs/ludvig/matterport3d"
+    )
     nn_num = args.nn_num or 25
     args.print_class_iou = True
-    args.ignore_classes = ['other furniture', 'wall', 'floor', 'ceiling']
+    args.ignore_classes = ["other furniture", "wall", "floor", "ceiling"]
     model_name = args.model_name
     split_name = val_split_path.split("/")[-1].split(".")[0]
 
     # Extract the 3DGS root folder name for the log filename
     gs_folder_name = os.path.basename(os.path.normpath(gs_root))
-    
+
     # Setup for results logging
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     log_filename = f"results_{gs_folder_name}_nn_num_{nn_num}.txt"
     log_path = os.path.join("logs", log_filename)
-    
+
     # Capture all printed output
     stdout_original = sys.stdout
     results_capture = []
-    
+
     class CaptureOutput:
         def write(self, text):
             results_capture.append(text)
             stdout_original.write(text)
+
         def flush(self):
             stdout_original.flush()
-    
+
     sys.stdout = CaptureOutput()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -117,23 +144,22 @@ def main():
     scene_ids = load_scene_list(val_split_path)
     print(f"Using {model_name.upper()} language features from {langfeat_root}")
     print(f"Found {len(scene_ids)} validation scenes.")
-    print(f"use nn_num: {nn_num}")  
+    print(f"use nn_num: {nn_num}")
 
     # ------------------------------
     # 2) Load CLIP model (once)
     # ------------------------------
     if model_name == "clip":
-        CLIP_MODEL = "ViT-B-16"                         
-        CLIP_PRETRAIN = "laion2b_s34b_b88k"             
+        CLIP_MODEL = "ViT-B-16"
+        CLIP_PRETRAIN = "laion2b_s34b_b88k"
         model, _, _ = open_clip.create_model_and_transforms(
             CLIP_MODEL, pretrained=CLIP_PRETRAIN
         )
         model = model.eval().to(device)
         tokenizer = open_clip.get_tokenizer(CLIP_MODEL)
     elif model_name == "siglip2":
-        siglip_spec = "siglip2-base-patch16-512"        
-        model = AutoModel.from_pretrained(f"google/{siglip_spec}")\
-                        .eval().to(device)
+        siglip_spec = "siglip2-base-patch16-512"
+        model = AutoModel.from_pretrained(f"google/{siglip_spec}").eval().to(device)
         tokenizer = AutoTokenizer.from_pretrained(f"google/{siglip_spec}")
     else:
         raise ValueError(f"Unsupported model name: {model_name}")
@@ -145,8 +171,9 @@ def main():
             text_feat /= text_feat.norm(dim=-1, keepdim=True)
             text_feat = text_feat.cpu()
         elif model_name == "siglip2":
-            inputs = tokenizer(text_prompts, padding="max_length",
-                               max_length=64, return_tensors="pt")
+            inputs = tokenizer(
+                text_prompts, padding="max_length", max_length=64, return_tensors="pt"
+            )
             inputs = {k: v.to(device) for k, v in inputs.items()}
             with torch.no_grad():
                 text_feat = model.get_text_features(**inputs)
@@ -164,13 +191,15 @@ def main():
     # Initialize metrics for both benchmarks
     benchmarks = [
         {
-            'name': 'matterport3d_semseg_21',
-            'text_feat': text_feat_21,
-            'class_labels': MATTERPORT_LABELS_21,
-            'confusion_mat': np.zeros((len(MATTERPORT_LABELS_21), len(MATTERPORT_LABELS_21)), dtype=np.int64),
-            'fn_ignore': np.zeros(len(MATTERPORT_LABELS_21), dtype=np.int64),
-            'total_points': 0,
-            'top1_correct': 0,
+            "name": "matterport3d_semseg_21",
+            "text_feat": text_feat_21,
+            "class_labels": MATTERPORT_LABELS_21,
+            "confusion_mat": np.zeros(
+                (len(MATTERPORT_LABELS_21), len(MATTERPORT_LABELS_21)), dtype=np.int64
+            ),
+            "fn_ignore": np.zeros(len(MATTERPORT_LABELS_21), dtype=np.int64),
+            "total_points": 0,
+            "top1_correct": 0,
         }
         # {
         #     'name': 'matterport3d_semseg_160',
@@ -198,25 +227,32 @@ def main():
             segment21 = np.load(os.path.join(scene_folder, "segment.npy"))
             segment160 = np.load(os.path.join(scene_folder, "segment_nyu_160.npy"))
         except:
-            raise ValueError(f"Error loading data for scene {scene_id} in {scene_folder}")
+            raise ValueError(
+                f"Error loading data for scene {scene_id} in {scene_folder}"
+            )
 
         gs_path = os.path.join(gs_root, scene_id, model_name, "gaussians.ply")
         if not os.path.exists(gs_path):
-            raise ValueError(f"Error loading Gaussian data for scene {scene_id} in {gs_path}")
-        
+            raise ValueError(
+                f"Error loading Gaussian data for scene {scene_id} in {gs_path}"
+            )
+
         gauss_xyz, _ = read_ply_file_3dgs(gs_path)
-        langfeat_path = os.path.join(langfeat_root, scene_id, model_name, "features.npy")
+        langfeat_path = os.path.join(
+            langfeat_root, scene_id, model_name, "features.npy"
+        )
         if not os.path.isfile(langfeat_path):
             print(f"[Warning] Language feature not found at {langfeat_path}")
             continue
-        gauss_lang_feat = torch.from_numpy(np.load(langfeat_path)).float() # (G, 512)
-        
+        gauss_lang_feat = torch.from_numpy(np.load(langfeat_path)).float()  # (G, 512)
 
         for bench in benchmarks:
             # Select current benchmark data
-            current_segment = segment21 if bench['name'] == 'matterport3d_semseg_21' else segment160
-            text_feat = bench['text_feat']
-            class_labels = bench['class_labels']
+            current_segment = (
+                segment21 if bench["name"] == "matterport3d_semseg_21" else segment160
+            )
+            text_feat = bench["text_feat"]
+            class_labels = bench["class_labels"]
             num_classes = len(class_labels)
 
             # Each element in current_segment is an array of valid GT class indices for that point
@@ -234,9 +270,13 @@ def main():
             batch_size = 128000
             gauss_labels = []
             for i in range(0, len(gauss_lang_feat), batch_size):
-                batch_feat = gauss_lang_feat[i:i+batch_size].to(device)
+                batch_feat = gauss_lang_feat[i : i + batch_size].to(device)
                 batch_pred = compute_relevancy_scores(
-                    batch_feat, text_feat, device, bench['name'], use_clip=True if model_name == "clip" else False
+                    batch_feat,
+                    text_feat,
+                    device,
+                    bench["name"],
+                    use_clip=True if model_name == "clip" else False,
                 )
                 gauss_labels.append(batch_pred)
             gauss_labels = np.concatenate(gauss_labels, axis=0)
@@ -249,7 +289,9 @@ def main():
             # Voting logic
             top1_preds = []
             for neighbors in neighbor_labels:
-                valid_neighbors = neighbors[neighbors != -1]  # ignore "no confident prediction"
+                valid_neighbors = neighbors[
+                    neighbors != -1
+                ]  # ignore "no confident prediction"
                 if len(valid_neighbors) == 0:
                     top1_preds.append(-1)
                 else:
@@ -258,7 +300,7 @@ def main():
             top1_preds = np.array(top1_preds)
 
             if args.save_pred:
-                _, nn_indices_all = kd_tree.query(coord, k=nn_num)          # (N, k)
+                _, nn_indices_all = kd_tree.query(coord, k=nn_num)  # (N, k)
                 neighbor_labels_all = gauss_labels[nn_indices_all].squeeze(-1)
 
                 full_preds = []
@@ -269,7 +311,7 @@ def main():
                     else:
                         counts = np.bincount(valid_neighbors)
                         full_preds.append(np.argmax(counts))
-                full_preds = np.array(full_preds, dtype=np.int32)         # (N,)
+                full_preds = np.array(full_preds, dtype=np.int32)  # (N,)
 
                 save_fname = f"ludvig_{model_name}_{scene_id}_semseg_pred.npy"
                 save_path = os.path.join(f"output/ludvig/{split_name}", save_fname)
@@ -277,28 +319,32 @@ def main():
                 np.save(save_path, full_preds)
 
             # Update metrics
-            bench['total_points'] += len(gt_val)
+            bench["total_points"] += len(gt_val)
             for i, (g, pred) in enumerate(zip(gt_val, top1_preds)):
                 gt_c = gt_first[i]
                 # Update confusion matrix
                 if pred == -1:
-                    bench['fn_ignore'][gt_c] += 1
+                    bench["fn_ignore"][gt_c] += 1
                 else:
                     if 0 <= gt_c < num_classes and 0 <= pred < num_classes:
-                        bench['confusion_mat'][gt_c, pred] += 1
+                        bench["confusion_mat"][gt_c, pred] += 1
 
                 # Update top-1 "correct" if the predicted label is in the GT set
                 if pred in g:
-                    bench['top1_correct'] += 1
+                    bench["top1_correct"] += 1
 
     # Compute and print results for each benchmark
     for bench in benchmarks:
         print(f"\n=== Results for {bench['name'].upper()} ===")
-        num_classes = len(bench['class_labels'])
-        cm = bench['confusion_mat']
-        fn_ignore = bench['fn_ignore']
+        num_classes = len(bench["class_labels"])
+        cm = bench["confusion_mat"]
+        fn_ignore = bench["fn_ignore"]
 
-        global_acc = bench['top1_correct'] / bench['total_points'] if bench['total_points'] > 0 else 0
+        global_acc = (
+            bench["top1_correct"] / bench["total_points"]
+            if bench["total_points"] > 0
+            else 0
+        )
         iou_array = np.full(num_classes, np.nan, dtype=float)
         acc_array = np.full(num_classes, np.nan, dtype=float)
 
@@ -312,7 +358,7 @@ def main():
                 continue
 
             acc = tp / (tp + fn)  # class accuracy
-            denom = (tp + fp + fn)
+            denom = tp + fp + fn
             iou = (tp / denom) if denom > 0 else 0.0
 
             iou_array[c] = iou
@@ -327,7 +373,9 @@ def main():
 
         # Foreground metrics: exclude user-specified classes (e.g. wall, floor, ceiling)
         excluded_indices = [
-            i for i, name in enumerate(bench['class_labels']) if name in args.ignore_classes
+            i
+            for i, name in enumerate(bench["class_labels"])
+            if name in args.ignore_classes
         ]
         print(f"Excluded indices: {excluded_indices}, classes: {args.ignore_classes}")
         # only consider classes that are valid and not in the excluded set
@@ -349,15 +397,16 @@ def main():
         if args.print_class_iou:
             print("\nPer-class IoU:")
             for c in range(num_classes):
-                if not np.isnan(iou_array[c]): 
+                if not np.isnan(iou_array[c]):
                     # only print class that presents during evaluation
-                    class_name = bench['class_labels'][c]
+                    class_name = bench["class_labels"][c]
                     print(f"{class_name:<20}: {iou_array[c]:.4f}")
 
     sys.stdout = stdout_original
-    results_str = ''.join(results_capture)
+    results_str = "".join(results_capture)
     log_path = f"logs/ludvig_3d_semseg_eval_{split_name}_{model_name}.txt"
     save_results_to_file(log_path, results_str, args)
+
 
 if __name__ == "__main__":
     main()

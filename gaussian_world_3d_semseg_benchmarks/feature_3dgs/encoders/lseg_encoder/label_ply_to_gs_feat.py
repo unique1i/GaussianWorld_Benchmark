@@ -1,16 +1,15 @@
-import os
 import numpy as np
 import torch
 from plyfile import PlyData
 from scipy.spatial import cKDTree as KDTree
-from tqdm import tqdm
-import clip 
+import clip
 from segmentation import make_encoder
-import trimesh 
+import trimesh
 
 ###################################
 # 1. Basic I/O Utilities
 ###################################
+
 
 def load_scene_list(val_split_path):
     """
@@ -21,6 +20,7 @@ def load_scene_list(val_split_path):
         lines = f.readlines()
     scene_ids = [line.strip() for line in lines if len(line.strip()) > 0]
     return scene_ids
+
 
 def read_ply_file_3dgs(file_path):
     """
@@ -36,22 +36,22 @@ def read_ply_file_3dgs(file_path):
     xyz = np.stack([x, y, z], axis=-1)
     return xyz, opacity
 
-
     # parser.add_argument("--output_root", type=str, default="/usr/bmicnas02/data-biwi-01/qimaqi_data/workspace/neurips_2025/feature-3dgs_Qi/output/scannetpp")
     # parser.add_argument("--label_path", type=str, default="/usr/bmicnas02/data-biwi-01/qimaqi_data/workspace/iccv_2025/GS_Transformer/data/scannet_full/metadata/semantic_benchmark/top100.txt")
 
+
 clip_pretrained, _ = make_encoder(
-    'clip_vitl16_384',
+    "clip_vitl16_384",
     features=256,
     groups=1,
     expand=False,
     exportable=False,
     hooks=[5, 11, 17, 23],
     use_readout="project",
-    )
+)
 
 
-# 
+#
 # label_path = '/usr/bmicnas02/data-biwi-01/qimaqi_data/workspace/iccv_2025/GS_Transformer/data/scannet_full/metadata/semantic_benchmark/top100.txt'
 # gs_path = '/usr/bmicnas02/data-biwi-01/qimaqi_data/workspace/iccv_2025/GS_Transformer/data/scannetpp_v1_mcmc_1.5M_3dgs/09c1414f1b/ckpts/point_cloud_30000.ply'
 # labeled_pc_path = '/usr/bmicnas02/data-biwi-01/qimaqi_data/workspace/neurips_2025/feature-3dgs_Qi/output/scannetpp/09c1414f1b/semantic_point_clouds_no_filter.ply'
@@ -82,14 +82,11 @@ clip_pretrained, _ = make_encoder(
 # labeled_pc_path = '/usr/bmicnas02/data-biwi-01/qimaqi_data/workspace/neurips_2025/feature-3dgs_Qi/output/scannet/scene0329_01/semantic_point_clouds_no_filter_200.ply'
 
 
-fname = 'scene0435_01'
-benchname = 'scannet200'
-label_path = '/usr/bmicnas02/data-biwi-01/qimaqi_data/workspace/neurips_2025/feature-3dgs_Qi/encoders/lseg_encoder/metadata/scannet_label200.txt'
-gs_path = '/srv/beegfs02/scratch/qimaqi_data/data/gaussianworld_subset/scannet_mini_val_set_suite/mcmc_3dgs/scene0435_01/ckpts/point_cloud_30000.ply'
-labeled_pc_path = '/usr/bmicnas02/data-biwi-01/qimaqi_data/workspace/neurips_2025/feature-3dgs_Qi/output/scannet/scene0435_01/semantic_point_clouds_no_filter_200.ply'
-
-
-
+fname = "scene0435_01"
+benchname = "scannet200"
+label_path = "/usr/bmicnas02/data-biwi-01/qimaqi_data/workspace/neurips_2025/feature-3dgs_Qi/encoders/lseg_encoder/metadata/scannet_label200.txt"
+gs_path = "/srv/beegfs02/scratch/qimaqi_data/data/gaussianworld_subset/scannet_mini_val_set_suite/mcmc_3dgs/scene0435_01/ckpts/point_cloud_30000.ply"
+labeled_pc_path = "/usr/bmicnas02/data-biwi-01/qimaqi_data/workspace/neurips_2025/feature-3dgs_Qi/output/scannet/scene0435_01/semantic_point_clouds_no_filter_200.ply"
 
 
 # ---- 3.1 Load label names & encode text ----
@@ -100,21 +97,21 @@ prompt_list = ["this is a " + name for name in label_names]
 
 with torch.no_grad():
     text = clip.tokenize(label_names)
-    text = text.cuda() # text = text.to(x.device) # TODO: need use correct device
-    text_feat = clip_pretrained.encode_text(text) # torch.Size([150, 512])
+    text = text.cuda()  # text = text.to(x.device) # TODO: need use correct device
+    text_feat = clip_pretrained.encode_text(text)  # torch.Size([150, 512])
     text_feat /= text_feat.norm(dim=-1, keepdim=True)
     text_feat = text_feat.cpu()  # shape: (150, 512)
 
 text_feat_np = text_feat.numpy()  # shape: (150, 512)
-np.save(f'./{benchname}_text_embeddings_lseg_feature_3dgs.npy', text_feat_np)
+np.save(f"./{benchname}_text_embeddings_lseg_feature_3dgs.npy", text_feat_np)
 
 gauss_xyz, _ = read_ply_file_3dgs(gs_path)
 
-ply_data = trimesh.load(labeled_pc_path) 
-label_color = ply_data.visual.vertex_colors[:,0]
+ply_data = trimesh.load(labeled_pc_path)
+label_color = ply_data.visual.vertex_colors[:, 0]
 label_xyz = ply_data.vertices
 valid_label = label_color != 255
-label_color = label_color[valid_label] # label masks
+label_color = label_color[valid_label]  # label masks
 label_xyz = label_xyz[valid_label]
 text_feat_np_label = text_feat_np[label_color]  # shape: (M, 512)
 
@@ -128,8 +125,8 @@ print("nn_lang_feat", nn_lang_feat.shape)
 print("gauss_xyz", gauss_xyz.shape)
 print("gs_vote_label", gs_vote_label.shape)
 # save nn_lang_feat
-np.save(f'./{fname}_{benchname}_feature_3dgs_text_feat.npy', nn_lang_feat)
-np.save(f'./{fname}_{benchname}_feature_3dgs_vote_label.npy', gs_vote_label)
+np.save(f"./{fname}_{benchname}_feature_3dgs_text_feat.npy", nn_lang_feat)
+np.save(f"./{fname}_{benchname}_feature_3dgs_vote_label.npy", gs_vote_label)
 
 
 # lang_feat_folder = os.path.join(scannetpp_langfeat_root, scene_id)
@@ -148,8 +145,3 @@ np.save(f'./{fname}_{benchname}_feature_3dgs_vote_label.npy', gs_vote_label)
 # if gauss_xyz.shape[0] == 0:
 #     print(f"[Warning] All 3DGS zero feats in {scene_id}")
 #     continue
-
-
-
-
-

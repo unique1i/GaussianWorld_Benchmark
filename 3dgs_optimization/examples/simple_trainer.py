@@ -32,7 +32,6 @@ from utils import (
     rgb_to_sh,
     set_random_seed,
 )
-from pathlib import Path
 
 from gsplat.compression import PngCompression
 from gsplat.distributed import cli
@@ -174,14 +173,12 @@ class Config:
 
         strategy = self.strategy
         if isinstance(strategy, DefaultStrategy):
-            strategy.refine_start_iter = int(
-                strategy.refine_start_iter * factor)
+            strategy.refine_start_iter = int(strategy.refine_start_iter * factor)
             strategy.refine_stop_iter = int(strategy.refine_stop_iter * factor)
             strategy.reset_every = int(strategy.reset_every * factor)
             strategy.refine_every = int(strategy.refine_every * factor)
         elif isinstance(strategy, MCMCStrategy):
-            strategy.refine_start_iter = int(
-                strategy.refine_start_iter * factor)
+            strategy.refine_start_iter = int(strategy.refine_start_iter * factor)
             strategy.refine_stop_iter = int(strategy.refine_stop_iter * factor)
             strategy.refine_every = int(strategy.refine_every * factor)
             print("MCMC strategy in use.")
@@ -211,12 +208,10 @@ def create_splats_with_optimizers(
             points = torch.from_numpy(parser.points).float()
             rgbs = torch.from_numpy(parser.points_rgb / 255.0).float()
         elif init_type == "random":
-            points = init_extent * scene_scale * \
-                (torch.rand((init_num_pts, 3)) * 2 - 1)
+            points = init_extent * scene_scale * (torch.rand((init_num_pts, 3)) * 2 - 1)
             rgbs = torch.rand((init_num_pts, 3))
         else:
-            raise ValueError(
-                "Please specify a correct init_type: sfm or random")
+            raise ValueError("Please specify a correct init_type: sfm or random")
         print(f"Init_type {init_type} used.")
     elif points3d_data is not None:
         # Initialize from points3d.ply data
@@ -225,15 +220,13 @@ def create_splats_with_optimizers(
         print("Init_type from points3d_data used.")
     else:
         print("No parser or points3d_data provided, use random 3DGS initialization.")
-        points = init_extent * scene_scale * \
-            (torch.rand((init_num_pts, 3)) * 2 - 1)
+        points = init_extent * scene_scale * (torch.rand((init_num_pts, 3)) * 2 - 1)
         rgbs = torch.rand((init_num_pts, 3))
 
     # Initialize the GS size to be the average dist of the 3 nearest neighbors
     dist2_avg = (knn(points, 4)[:, 1:] ** 2).mean(dim=-1)  # [N,]
     dist_avg = torch.sqrt(dist2_avg)
-    scales = torch.log(
-        dist_avg * init_scale).unsqueeze(-1).repeat(1, 3)  # [N, 3]
+    scales = torch.log(dist_avg * init_scale).unsqueeze(-1).repeat(1, 3)  # [N, 3]
 
     # Distribute the GSs to different ranks (also works for single rank)
     points = points[world_rank::world_size]
@@ -257,8 +250,7 @@ def create_splats_with_optimizers(
         colors = torch.zeros((N, (sh_degree + 1) ** 2, 3))  # [N, K, 3]
         colors[:, 0, :] = rgb_to_sh(rgbs)
         params.append(("sh0", torch.nn.Parameter(colors[:, :1, :]), 2.5e-3))
-        params.append(("shN", torch.nn.Parameter(
-            colors[:, 1:, :]), 2.5e-3 / 20))
+        params.append(("shN", torch.nn.Parameter(colors[:, 1:, :]), 2.5e-3 / 20))
     else:
         # features will be used for appearance and view-dependent shading
         features = torch.rand(N, feature_dim)  # [N, feature_dim]
@@ -341,7 +333,7 @@ class Runner:
             device=self.device,
             world_rank=world_rank,
             world_size=world_size,
-            points3d_data=self.points3d_data  # Pass the points3d data
+            points3d_data=self.points3d_data,  # Pass the points3d data
         )
         if self.cfg.disable_xyz_opti:
             self.splats["means"].requires_grad_(False)
@@ -364,8 +356,10 @@ class Runner:
             assert_never(self.cfg.strategy)
         if self.init_point_num is not None and self.cfg.cap_max_by_init_point_num:
             # when init_point_num is the from point clouds voxel downsampling, it reflects the scene size
-            cap_max = min(round(1.5 * self.init_point_num / 1_000)
-                          * 1_000, self.cfg.strategy.cap_max)
+            cap_max = min(
+                round(1.5 * self.init_point_num / 1_000) * 1_000,
+                self.cfg.strategy.cap_max,
+            )
             self.cfg.strategy.cap_max = int(cap_max)
             print(f"MCMC cap_max of GSs set to {cap_max}.")
         if self.cfg.prune_by_bbox:
@@ -376,6 +370,7 @@ class Runner:
         pprint.pp(self.cfg)
         if self.cfg.use_wandb:
             import uuid
+
             wandb.init(
                 project="GaussianWorld",
                 config=self.cfg,
@@ -389,13 +384,11 @@ class Runner:
             if cfg.compression == "png":
                 self.compression_method = PngCompression()
             else:
-                raise ValueError(
-                    f"Unknown compression strategy: {cfg.compression}")
+                raise ValueError(f"Unknown compression strategy: {cfg.compression}")
 
         self.pose_optimizers = []
         if cfg.pose_opt:
-            self.pose_adjust = CameraOptModule(
-                len(self.trainset)).to(self.device)
+            self.pose_adjust = CameraOptModule(len(self.trainset)).to(self.device)
             self.pose_adjust.zero_init()
             self.pose_optimizers = [
                 torch.optim.Adam(
@@ -408,8 +401,7 @@ class Runner:
                 self.pose_adjust = DDP(self.pose_adjust)
 
         if cfg.pose_noise > 0.0:
-            self.pose_perturb = CameraOptModule(
-                len(self.trainset)).to(self.device)
+            self.pose_perturb = CameraOptModule(len(self.trainset)).to(self.device)
             self.pose_perturb.random_init(cfg.pose_noise)
             if world_size > 1:
                 self.pose_perturb = DDP(self.pose_perturb)
@@ -438,8 +430,7 @@ class Runner:
                 self.app_module = DDP(self.app_module)
 
         # Losses & Metrics.
-        self.ssim = StructuralSimilarityIndexMeasure(
-            data_range=1.0).to(self.device)
+        self.ssim = StructuralSimilarityIndexMeasure(data_range=1.0).to(self.device)
         self.psnr = PeakSignalNoiseRatio(data_range=1.0).to(self.device)
 
         if cfg.lpips_net == "alex":
@@ -489,8 +480,7 @@ class Runner:
             colors = colors + self.splats["colors"]
             colors = torch.sigmoid(colors)
         else:
-            colors = torch.cat(
-                [self.splats["sh0"], self.splats["shN"]], 1)  # [N, K, 3]
+            colors = torch.cat([self.splats["sh0"], self.splats["shN"]], 1)  # [N, K, 3]
 
         rasterize_mode = "antialiased" if self.cfg.antialiased else "classic"
         render_colors, render_alphas, info = rasterization(
@@ -556,7 +546,7 @@ class Runner:
 
         # Training loop.
         global_tic = time.time()
-        pbar = tqdm.tqdm(range(init_step, max_steps+1))
+        pbar = tqdm.tqdm(range(init_step, max_steps + 1))
         for step in pbar:
             if not cfg.disable_viewer:
                 while self.viewer.state.status == "paused":
@@ -573,14 +563,17 @@ class Runner:
                 if data["image"] is None or (cfg.depth_loss and data["depth"] is None):
                     sample_info = f"image_id: {data['image_id'].item()}, name: {data['image_name']}"
                     print(
-                        f"\033[93mWARNING [Step {step}]: Skipping sample with failed load ({sample_info})\033[0m")
+                        f"\033[93mWARNING [Step {step}]: Skipping sample with failed load ({sample_info})\033[0m"
+                    )
 
                     if not cfg.disable_viewer:
                         self.viewer.lock.release()
                     continue
-            except Exception as e:
+            except Exception:
                 # catch any data loading error
-                error_msg = f"[Step {step}] Skipping iteration due to data loading error"
+                error_msg = (
+                    f"[Step {step}] Skipping iteration due to data loading error"
+                )
                 print(f"\033[93mWARNING: {error_msg}\033[0m")  # Yellow text
                 # print(f"Error: {e}")
 
@@ -588,8 +581,7 @@ class Runner:
                     self.viewer.lock.release()
                 continue
 
-            camtoworlds = camtoworlds_gt = data["camtoworld"].to(
-                device)  # [1, 4, 4]
+            camtoworlds = camtoworlds_gt = data["camtoworld"].to(device)  # [1, 4, 4]
             Ks = data["K"].to(device)  # [1, 3, 3]
             pixels = data["image"].to(device) / 255.0  # [1, H, W, 3]
             num_train_rays_per_step = (
@@ -610,8 +602,7 @@ class Runner:
                 camtoworlds = self.pose_adjust(camtoworlds, image_ids)
 
             # sh schedule
-            sh_degree_to_use = min(
-                step // cfg.sh_degree_interval, cfg.sh_degree)
+            sh_degree_to_use = min(step // cfg.sh_degree_interval, cfg.sh_degree)
 
             # forward
             renders, alphas, info = self.rasterize_splats(
@@ -647,16 +638,23 @@ class Runner:
             # loss
             if self.cfg.ignore_pixel_border > 0:
                 ignore_pixel_border = self.cfg.ignore_pixel_border
-                pixels = pixels[:, ignore_pixel_border:-ignore_pixel_border,
-                                ignore_pixel_border:-ignore_pixel_border, :]
-                colors = colors[:, ignore_pixel_border:-ignore_pixel_border,
-                                ignore_pixel_border:-ignore_pixel_border, :]
+                pixels = pixels[
+                    :,
+                    ignore_pixel_border:-ignore_pixel_border,
+                    ignore_pixel_border:-ignore_pixel_border,
+                    :,
+                ]
+                colors = colors[
+                    :,
+                    ignore_pixel_border:-ignore_pixel_border,
+                    ignore_pixel_border:-ignore_pixel_border,
+                    :,
+                ]
             l1loss = F.l1_loss(colors, pixels)
             ssimloss = 1.0 - self.ssim(
                 pixels.permute(0, 3, 1, 2), colors.permute(0, 3, 1, 2)
             )
-            loss = l1loss * (1.0 - cfg.ssim_lambda) + \
-                ssimloss * cfg.ssim_lambda
+            loss = l1loss * (1.0 - cfg.ssim_lambda) + ssimloss * cfg.ssim_lambda
             if cfg.depth_loss:
                 # if self.cfg.ignore_pixel_border > 0:
                 #     depth_gt = depth_gt[:, ignore_pixel_border:-ignore_pixel_border,
@@ -666,13 +664,13 @@ class Runner:
 
                 nan_mask_1 = ~torch.isnan(depth_gt).squeeze()
                 nan_mask_2 = ~torch.isnan(depths.squeeze())
-                filter_mask = nan_mask_1 & nan_mask_2 & (
-                    depth_gt.squeeze() > 0.01)
+                filter_mask = nan_mask_1 & nan_mask_2 & (depth_gt.squeeze() > 0.01)
 
                 if filter_mask.sum() > 0:
                     depth_err = torch.zeros_like(depth_gt.squeeze())
-                    depth_err[filter_mask] = depth_gt.squeeze(
-                    )[filter_mask] - depths.squeeze()[filter_mask]
+                    depth_err[filter_mask] = (
+                        depth_gt.squeeze()[filter_mask] - depths.squeeze()[filter_mask]
+                    )
 
                     valid_errors = depth_err[filter_mask]
                     if valid_errors.numel() > 0:
@@ -680,12 +678,16 @@ class Runner:
                         if median_err > 0:
                             err_mask = depth_err.abs() < 10 * median_err
                         else:
-                            err_mask = depth_err.abs() < 2  # fixed threshold to avoid too large error
+                            err_mask = (
+                                depth_err.abs() < 2
+                            )  # fixed threshold to avoid too large error
                         loss_mask = filter_mask & err_mask
 
                         if loss_mask.sum() > 0:
                             depthloss = F.l1_loss(
-                                depths.squeeze()[loss_mask], depth_gt.squeeze()[loss_mask])
+                                depths.squeeze()[loss_mask],
+                                depth_gt.squeeze()[loss_mask],
+                            )
                         else:
                             depthloss = torch.tensor(0, device=loss.device)
                     else:
@@ -705,13 +707,15 @@ class Runner:
             if cfg.scale_reg > 0.0:
                 loss = (
                     loss
-                    + cfg.scale_reg *
-                    torch.abs(torch.exp(self.splats["scales"])).mean()
+                    + cfg.scale_reg * torch.abs(torch.exp(self.splats["scales"])).mean()
                 )
 
             loss.backward()
 
-            desc = f"total loss={loss.item():.3f}| " f"sh degree={sh_degree_to_use}| rgb loss={l1loss.item():.6f}| "
+            desc = (
+                f"total loss={loss.item():.3f}| "
+                f"sh degree={sh_degree_to_use}| rgb loss={l1loss.item():.6f}| "
+            )
             if cfg.depth_loss:
                 desc += f"depth loss={depthloss.item():.6f}| "
             if cfg.pose_opt and cfg.pose_noise:
@@ -722,8 +726,7 @@ class Runner:
 
             # write images (gt and render)
             if world_rank == 0 and step % 500 == 0:
-                canvas = torch.cat(
-                    [pixels, colors], dim=2).detach().cpu().numpy()
+                canvas = torch.cat([pixels, colors], dim=2).detach().cpu().numpy()
                 canvas = canvas.reshape(-1, *canvas.shape[2:])
                 if cfg.val_save_image:
                     imageio.imwrite(
@@ -736,15 +739,12 @@ class Runner:
                 self.writer.add_scalar("train/loss", loss.item(), step)
                 self.writer.add_scalar("train/l1loss", l1loss.item(), step)
                 self.writer.add_scalar("train/ssimloss", ssimloss.item(), step)
-                self.writer.add_scalar(
-                    "train/num_GS", len(self.splats["means"]), step)
+                self.writer.add_scalar("train/num_GS", len(self.splats["means"]), step)
                 self.writer.add_scalar("train/mem", mem, step)
                 if cfg.depth_loss:
-                    self.writer.add_scalar(
-                        "train/depthloss", depthloss.item(), step)
+                    self.writer.add_scalar("train/depthloss", depthloss.item(), step)
                 if cfg.tb_save_image:
-                    canvas = torch.cat(
-                        [pixels, colors], dim=2).detach().cpu().numpy()
+                    canvas = torch.cat([pixels, colors], dim=2).detach().cpu().numpy()
                     canvas = canvas.reshape(-1, *canvas.shape[2:])
                     self.writer.add_image("train/render", canvas, step)
                 self.writer.flush()
@@ -804,7 +804,8 @@ class Runner:
             if step in [i for i in cfg.eval_steps]:
                 self.eval(step, eval_depth=cfg.depth_loss)
                 self.save_ply(
-                    path=f"{self.ckpt_dir}/point_cloud_{step}.ply", prune_by_bbox=True)
+                    path=f"{self.ckpt_dir}/point_cloud_{step}.ply", prune_by_bbox=True
+                )
                 if cfg.render_traj:
                     self.render_traj(step)
 
@@ -835,8 +836,11 @@ class Runner:
         # our custom collate function that handles error cases
         def collate_fn(batch):
             # Filter out any None values from failed loads
-            valid_samples = [b for b in batch if b["image"] is not None and (
-                not eval_depth or b["depth"] is not None)]
+            valid_samples = [
+                b
+                for b in batch
+                if b["image"] is not None and (not eval_depth or b["depth"] is not None)
+            ]
             if not valid_samples:
                 # All samples in this batch failed to load
                 return None
@@ -844,7 +848,11 @@ class Runner:
             return torch.utils.data.dataloader.default_collate(valid_samples)
 
         valloader = torch.utils.data.DataLoader(
-            self.valset, batch_size=1, shuffle=False, num_workers=1, collate_fn=collate_fn
+            self.valset,
+            batch_size=1,
+            shuffle=False,
+            num_workers=1,
+            collate_fn=collate_fn,
         )
         ellipse_time = 0
         metrics = {"psnr": [], "ssim": [], "lpips": [], "depth_loss": []}
@@ -853,7 +861,8 @@ class Runner:
             try:
                 if data is None:
                     print(
-                        f"\033[93mWARNING [Eval {stage}, Batch {i}]: skipped due to failed loads\033[0m")
+                        f"\033[93mWARNING [Eval {stage}, Batch {i}]: skipped due to failed loads\033[0m"
+                    )
                     continue
 
                 camtoworlds = data["camtoworld"].to(device)
@@ -865,7 +874,7 @@ class Runner:
 
                 torch.cuda.synchronize()
                 tic = time.time()
-            except Exception as e:
+            except Exception:
                 error_msg = f"[Eval {stage}, Sample {i}] Skipping sample due to error"
                 print(f"\033[93mWARNING: {error_msg}\033[0m")
                 skipped_samples += 1
@@ -891,8 +900,7 @@ class Runner:
 
             if world_rank == 0:
                 # write images
-                canvas = torch.cat([pixels, colors], dim=2).squeeze(
-                    0).cpu().numpy()
+                canvas = torch.cat([pixels, colors], dim=2).squeeze(0).cpu().numpy()
                 if cfg.val_save_image:
                     if i < 50:
                         imageio.imwrite(
@@ -903,10 +911,18 @@ class Runner:
                 colors = colors.permute(0, 3, 1, 2)  # [1, 3, H, W]
                 if self.cfg.ignore_pixel_border > 0:
                     ignore_pixel_border = self.cfg.ignore_pixel_border
-                    pixels = pixels[:, :, ignore_pixel_border:-ignore_pixel_border,
-                                    ignore_pixel_border:-ignore_pixel_border]
-                    colors = colors[:, :, ignore_pixel_border:-ignore_pixel_border,
-                                    ignore_pixel_border:-ignore_pixel_border]
+                    pixels = pixels[
+                        :,
+                        :,
+                        ignore_pixel_border:-ignore_pixel_border,
+                        ignore_pixel_border:-ignore_pixel_border,
+                    ]
+                    colors = colors[
+                        :,
+                        :,
+                        ignore_pixel_border:-ignore_pixel_border,
+                        ignore_pixel_border:-ignore_pixel_border,
+                    ]
                 metrics["psnr"].append(self.psnr(colors, pixels))
                 metrics["ssim"].append(self.ssim(colors, pixels))
                 metrics["lpips"].append(self.lpips(colors, pixels))
@@ -916,7 +932,8 @@ class Runner:
                     nan_mask_2 = ~torch.isnan(depths.squeeze())
                     depth_mask = depth_mask & nan_mask_1 & nan_mask_2
                     depthloss = F.l1_loss(
-                        depths.squeeze()[depth_mask], depth_gt.squeeze()[depth_mask])
+                        depths.squeeze()[depth_mask], depth_gt.squeeze()[depth_mask]
+                    )
                     metrics["depth_loss"].append(depthloss)
 
         if world_rank == 0:
@@ -947,7 +964,7 @@ class Runner:
                     stats["depth_loss"] = depth_loss.item()
                 else:
                     print("All depth loss values are NaN")
-                    stats["depth_loss"] = 0.
+                    stats["depth_loss"] = 0.0
             with open(f"{self.stats_dir}/{stage}_step{step:04d}.json", "w") as f:
                 json.dump(stats, f)
             # save stats to tensorboard
@@ -967,34 +984,38 @@ class Runner:
         if self.parser is not None:
             # Original settings using self.parser
             camtoworlds = self.parser.camtoworlds[5:-5]
-            camtoworlds = generate_interpolated_path(
-                camtoworlds, 1)  # [N, 3, 4]
+            camtoworlds = generate_interpolated_path(camtoworlds, 1)  # [N, 3, 4]
             camtoworlds = np.concatenate(
                 [
                     camtoworlds,
-                    np.repeat(np.array([[[0.0, 0.0, 0.0, 1.0]]]),
-                              len(camtoworlds), axis=0),
+                    np.repeat(
+                        np.array([[[0.0, 0.0, 0.0, 1.0]]]), len(camtoworlds), axis=0
+                    ),
                 ],
                 axis=1,
             )  # [N, 4, 4]
 
             camtoworlds = torch.from_numpy(camtoworlds).float().to(device)
-            K = torch.from_numpy(list(self.parser.Ks_dict.values())[
-                0]).float().to(device)
+            K = (
+                torch.from_numpy(list(self.parser.Ks_dict.values())[0])
+                .float()
+                .to(device)
+            )
             width, height = list(self.parser.imsize_dict.values())[0]
 
         else:
             # using BlenderDatasetZipped
-            camtoworlds = torch.stack([self.valset[i]['camtoworld']
-                                       for i in range(len(self.valset))]).to(device)
+            camtoworlds = torch.stack(
+                [self.valset[i]["camtoworld"] for i in range(len(self.valset))]
+            ).to(device)
             # Interpolating poses (if needed) or using as-is
-            camtoworlds = generate_interpolated_path(
-                camtoworlds.cpu(), 1)
+            camtoworlds = generate_interpolated_path(camtoworlds.cpu(), 1)
             camtoworlds = np.concatenate(
                 [
                     camtoworlds,
-                    np.repeat(np.array([[[0.0, 0.0, 0.0, 1.0]]]),
-                              len(camtoworlds), axis=0),
+                    np.repeat(
+                        np.array([[[0.0, 0.0, 0.0, 1.0]]]), len(camtoworlds), axis=0
+                    ),
                 ],
                 axis=1,
             )  # [N, 4, 4]
@@ -1002,14 +1023,15 @@ class Runner:
 
             # assume same intrinsics for all frames
             K = self.valset[0]["K"].to(device)
-            width, height = self.valset.resize[0] - \
-                self.valset.crop_edge, self.valset.resize[1] - \
-                self.valset.crop_edge
+            width, height = (
+                self.valset.resize[0] - self.valset.crop_edge,
+                self.valset.resize[1] - self.valset.crop_edge,
+            )
 
         canvas_all = []
         for i in tqdm.trange(len(camtoworlds), desc="Rendering trajectory"):
             renders, _, _ = self.rasterize_splats(
-                camtoworlds=camtoworlds[i: i + 1],  # Use the current pose
+                camtoworlds=camtoworlds[i : i + 1],  # Use the current pose
                 Ks=K[None],  # Add batch dimension to K
                 width=width,
                 height=height,
@@ -1022,9 +1044,12 @@ class Runner:
             # Process the rendered colors and depths
             colors = torch.clamp(renders[0, ..., 0:3], 0.0, 1.0)  # [H, W, 3]
             depths = renders[0, ..., 3:4]  # [H, W, 1]
-            depths = (depths - depths.min()) / (depths.max() -
-                                                # Normalize depth to [0, 1]
-                                                depths.min())
+            depths = (depths - depths.min()) / (
+                depths.max()
+                -
+                # Normalize depth to [0, 1]
+                depths.min()
+            )
 
             # Concatenate the RGB and depth images side by side
             canvas = torch.cat(
@@ -1084,17 +1109,17 @@ class Runner:
 
     # Experimental
     def construct_list_of_attributes(self):
-        l = ['x', 'y', 'z', 'nx', 'ny', 'nz']
+        l = ["x", "y", "z", "nx", "ny", "nz"]
         # All channels except the 3 DC
-        for i in range(self.splats["sh0"].shape[1]*self.splats["sh0"].shape[2]):
-            l.append('f_dc_{}'.format(i))
-        for i in range(self.splats["shN"].shape[1]*self.splats["shN"].shape[2]):
-            l.append('f_rest_{}'.format(i))
-        l.append('opacity')
+        for i in range(self.splats["sh0"].shape[1] * self.splats["sh0"].shape[2]):
+            l.append("f_dc_{}".format(i))
+        for i in range(self.splats["shN"].shape[1] * self.splats["shN"].shape[2]):
+            l.append("f_rest_{}".format(i))
+        l.append("opacity")
         for i in range(self.splats["scales"].shape[1]):
-            l.append('scale_{}'.format(i))
+            l.append("scale_{}".format(i))
         for i in range(self.splats["quats"].shape[1]):
-            l.append('rot_{}'.format(i))
+            l.append("rot_{}".format(i))
         return l
 
     # Experimental
@@ -1104,43 +1129,65 @@ class Runner:
 
         xyz = self.splats["means"].detach().cpu().numpy()
         normals = np.zeros_like(xyz)
-        f_dc = self.splats["sh0"].detach().transpose(
-            1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
-        f_rest = self.splats["shN"].detach().transpose(
-            1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
-        opacities = self.splats["opacities"].detach(
-        ).unsqueeze(-1).cpu().numpy()
+        f_dc = (
+            self.splats["sh0"]
+            .detach()
+            .transpose(1, 2)
+            .flatten(start_dim=1)
+            .contiguous()
+            .cpu()
+            .numpy()
+        )
+        f_rest = (
+            self.splats["shN"]
+            .detach()
+            .transpose(1, 2)
+            .flatten(start_dim=1)
+            .contiguous()
+            .cpu()
+            .numpy()
+        )
+        opacities = self.splats["opacities"].detach().unsqueeze(-1).cpu().numpy()
         scale = self.splats["scales"].detach().cpu().numpy()
         rotation = self.splats["quats"].detach().cpu().numpy()
 
         list_of_attributes = self.construct_list_of_attributes()
         if self.max_sh_degree == 0:
             list_of_attributes = [
-                attr for attr in list_of_attributes if 'f_rest' not in attr]
-        dtype_full = [(attribute, 'f4') for attribute in list_of_attributes]
+                attr for attr in list_of_attributes if "f_rest" not in attr
+            ]
+        dtype_full = [(attribute, "f4") for attribute in list_of_attributes]
 
         elements = np.empty(xyz.shape[0], dtype=dtype_full)
         if self.max_sh_degree == 0:
             attributes = np.concatenate(
-                (xyz, normals, f_dc, opacities, scale, rotation), axis=1)
+                (xyz, normals, f_dc, opacities, scale, rotation), axis=1
+            )
         else:
             attributes = np.concatenate(
-                (xyz, normals, f_dc, f_rest, opacities, scale, rotation), axis=1)
+                (xyz, normals, f_dc, f_rest, opacities, scale, rotation), axis=1
+            )
         # Fill the elements with the attributes
         elements[:] = list(map(tuple, attributes))
 
-        if prune_by_bbox and self.init_bbox_min is not None and self.init_bbox_max is not None:
+        if (
+            prune_by_bbox
+            and self.init_bbox_min is not None
+            and self.init_bbox_max is not None
+        ):
             bbox_min = [i - 1 for i in self.init_bbox_min]
             bbox_max = [i + 1 for i in self.init_bbox_max]
             mask = (
-                (xyz[:, 0] >= bbox_min[0]) & (xyz[:, 0] <= bbox_max[0]) &
-                (xyz[:, 1] >= bbox_min[1]) & (xyz[:, 1] <= bbox_max[1]) &
-                (xyz[:, 2] >= bbox_min[2]) & (xyz[:, 2] <= bbox_max[2])
+                (xyz[:, 0] >= bbox_min[0])
+                & (xyz[:, 0] <= bbox_max[0])
+                & (xyz[:, 1] >= bbox_min[1])
+                & (xyz[:, 1] <= bbox_max[1])
+                & (xyz[:, 2] >= bbox_min[2])
+                & (xyz[:, 2] <= bbox_max[2])
             )
             elements = elements[mask]
-            print(
-                f"Pruned {len(mask) - len(elements)} gaussians by init bounding box.")
-        el = PlyElement.describe(elements, 'vertex')
+            print(f"Pruned {len(mask) - len(elements)} gaussians by init bounding box.")
+        el = PlyElement.describe(elements, "vertex")
         PlyData([el]).write(path)
         print(f"Saving {len(elements)} gaussians to {path}")
 
@@ -1160,8 +1207,7 @@ def main(local_rank: int, world_rank, world_size: int, cfg: Config):
             for file in cfg.ckpt
         ]
         for k in runner.splats.keys():
-            runner.splats[k].data = torch.cat(
-                [ckpt["splats"][k] for ckpt in ckpts])
+            runner.splats[k].data = torch.cat([ckpt["splats"][k] for ckpt in ckpts])
         step = ckpts[0]["step"]
         runner.eval(step=step)
         # runner.render_traj(step=step)
@@ -1216,8 +1262,7 @@ if __name__ == "__main__":
     # try import extra dependencies
     if cfg.compression == "png":
         try:
-            import plas
-            import torchpq
+            pass
         except:
             raise ImportError(
                 "To use PNG compression, you need to install "

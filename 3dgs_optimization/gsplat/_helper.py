@@ -9,16 +9,14 @@ import torch.nn.functional as F
 def load_test_data(
     data_path: Optional[str] = None,
     device="cuda",
-    scene_crop: Tuple[float, float, float, float,
-                      float, float] = (-2, -2, -2, 2, 2, 2),
+    scene_crop: Tuple[float, float, float, float, float, float] = (-2, -2, -2, 2, 2, 2),
     scene_grid: int = 1,
 ):
     """Load the test data."""
     assert scene_grid % 2 == 1, "scene_grid must be odd"
 
     if data_path is None:
-        data_path = os.path.join(os.path.dirname(
-            __file__), "../assets/test_garden.npz")
+        data_path = os.path.join(os.path.dirname(__file__), "../assets/test_garden.npz")
     data = np.load(data_path)
     height, width = data["height"].item(), data["width"].item()
     viewmats = torch.from_numpy(data["viewmats"]).float().to(device)
@@ -43,8 +41,7 @@ def load_test_data(
         ],
         indexing="ij",
     )
-    grid = torch.stack(
-        [gridx, gridy, torch.zeros_like(gridx)], dim=-1).reshape(-1, 3)
+    grid = torch.stack([gridx, gridy, torch.zeros_like(gridx)], dim=-1).reshape(-1, 3)
     means = means[None, :, :] + grid[:, None, :] * edges[None, None, :]
     means = means.reshape(-1, 3)
     colors = colors.repeat(repeats**2, 1)

@@ -59,8 +59,7 @@ def main(local_rank: int, world_rank, world_size: int, args):
         sh_degree = None
         C = len(viewmats)
         N = len(means)
-        print("rank", world_rank, "Number of Gaussians:",
-              N, "Number of Cameras:", C)
+        print("rank", world_rank, "Number of Gaussians:", N, "Number of Cameras:", C)
 
         # batched render
         for _ in tqdm.trange(1):
@@ -93,10 +92,8 @@ def main(local_rank: int, world_rank, world_size: int, args):
             torch.cat(
                 [
                     render_rgbs.reshape(C * height, width, 3),
-                    render_depths.reshape(
-                        C * height, width, 1).expand(-1, -1, 3),
-                    render_alphas.reshape(
-                        C * height, width, 1).expand(-1, -1, 3),
+                    render_depths.reshape(C * height, width, 1).expand(-1, -1, 3),
+                    render_alphas.reshape(C * height, width, 1).expand(-1, -1, 3),
                 ],
                 dim=1,
             )
@@ -227,8 +224,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--port", type=int, default=8097, help="port for the viewer server"
     )
-    parser.add_argument("--backend", type=str,
-                        default="gsplat", help="gsplat, inria")
+    parser.add_argument("--backend", type=str, default="gsplat", help="gsplat, inria")
     args = parser.parse_args()
     assert args.scene_grid % 2 == 1, "scene_grid must be odd"
 

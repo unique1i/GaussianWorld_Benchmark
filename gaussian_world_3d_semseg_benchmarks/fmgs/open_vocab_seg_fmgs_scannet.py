@@ -14,23 +14,25 @@ from transformers import AutoModel, AutoTokenizer
 # 1. Basic I/O Utilities
 ###################################
 
+
 def save_results_to_file(log_path, results_str, args):
     """Save the results to a text file with relevant parameters in the filename."""
     # Create logs directory if it doesn't exist
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
-    
+
     # Write results to the file
-    with open(log_path, 'w') as f:
+    with open(log_path, "w") as f:
         # Write command line arguments first
         f.write("Command line arguments:\n")
         for arg, value in vars(args).items():
             f.write(f"{arg}: {value}\n")
         f.write("\n")
-        
+
         # Write experiment results
         f.write(results_str)
-    
+
     print(f"\nResults saved to: {log_path}")
+
 
 def load_scene_list(val_split_path):
     """
@@ -57,15 +59,17 @@ def read_ply_file_3dgs(file_path):
     xyz = np.stack([x, y, z], axis=-1)
     return xyz, opacity
 
+
 ###################################
 # 2. CLIP Relevancy Scoring
 ###################################
 
+
 @torch.no_grad()
 def compute_relevancy_scores(
-    lang_feat: torch.Tensor,      # shape: (N, 512)
-    text_feat: torch.Tensor,      # shape: (C, 512)
-    canon_feat: torch.Tensor,     # shape: (K, 512)
+    lang_feat: torch.Tensor,  # shape: (N, 512)
+    text_feat: torch.Tensor,  # shape: (C, 512)
+    canon_feat: torch.Tensor,  # shape: (K, 512)
     device: torch.device,
     use_dot_similarity: bool = True,
 ):
@@ -98,10 +102,10 @@ def compute_relevancy_scores(
     else:
         # Original ratio‑based relevancy score
         canon_feat = canon_feat.to(device, non_blocking=True)
-        dot_lang_text = torch.matmul(lang_feat, text_feat.t())    # (N, C)
+        dot_lang_text = torch.matmul(lang_feat, text_feat.t())  # (N, C)
         dot_lang_canon = torch.matmul(lang_feat, canon_feat.t())  # (N, K)
 
-        exp_lang_text = dot_lang_text.exp()    # (N, C)
+        exp_lang_text = dot_lang_text.exp()  # (N, C)
         exp_lang_canon = dot_lang_canon.exp()  # (N, K)
 
         N, C = dot_lang_text.shape
@@ -114,22 +118,52 @@ def compute_relevancy_scores(
             relevancy_scores.append(score_c)
 
         relevancy_matrix = torch.stack(relevancy_scores, dim=0).t()  # (N, C)
-        pred_label = torch.argmax(relevancy_matrix, dim=1)           # (N,)
+        pred_label = torch.argmax(relevancy_matrix, dim=1)  # (N,)
         return pred_label.cpu().numpy()
+
 
 ###################################
 # 3. Main Evaluation Script
 ###################################
 
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Open‑Vocal 3DGS semantic evaluation")
-    parser.add_argument("--val_split_path", type=str, default="/home/yli7/projects/yue/language_feat_exps/splits/scannet_mini_val.txt")
-    parser.add_argument("--preprocessed_root", type=str, default="/home/yli7/scratch2/datasets/ptv3_preprocessed/scannet_preprocessed")
-    parser.add_argument("--gs_root", type=str, default="/home/yli7/scratch/datasets/gaussian_world/outputs/ludvig/scannet")
-    parser.add_argument("--langfeat_root", type=str, default="/home/yli7/scratch/datasets/gaussian_world/outputs/ludvig/scannet")
-    parser.add_argument("--label20_path", type=str, default="/home/yli7/scratch2/datasets/scannet/metadata/semantic_benchmark/label20.txt")
-    parser.add_argument("--label200_path", type=str, default="/home/yli7/scratch2/datasets/scannet/metadata/semantic_benchmark/label200.txt")
-    parser.add_argument("--use_dot_similarity", action="store_true", help="If set, use plain CLIP dot similarity instead of ratio scoring.")
+    parser.add_argument(
+        "--val_split_path",
+        type=str,
+        default="/home/yli7/projects/yue/language_feat_exps/splits/scannet_mini_val.txt",
+    )
+    parser.add_argument(
+        "--preprocessed_root",
+        type=str,
+        default="/home/yli7/scratch2/datasets/ptv3_preprocessed/scannet_preprocessed",
+    )
+    parser.add_argument(
+        "--gs_root",
+        type=str,
+        default="/home/yli7/scratch/datasets/gaussian_world/outputs/ludvig/scannet",
+    )
+    parser.add_argument(
+        "--langfeat_root",
+        type=str,
+        default="/home/yli7/scratch/datasets/gaussian_world/outputs/ludvig/scannet",
+    )
+    parser.add_argument(
+        "--label20_path",
+        type=str,
+        default="/home/yli7/scratch2/datasets/scannet/metadata/semantic_benchmark/label20.txt",
+    )
+    parser.add_argument(
+        "--label200_path",
+        type=str,
+        default="/home/yli7/scratch2/datasets/scannet/metadata/semantic_benchmark/label200.txt",
+    )
+    parser.add_argument(
+        "--use_dot_similarity",
+        action="store_true",
+        help="If set, use plain CLIP dot similarity instead of ratio scoring.",
+    )
     return parser.parse_args()
 
 
@@ -146,37 +180,37 @@ def main():
     # 1) Load validation scenes
     # ------------------------------
     scene_ids = load_scene_list(args.val_split_path)
-    # scene_ids = [scene_ids[0]] 
+    # scene_ids = [scene_ids[0]]
     print(f"Found {len(scene_ids)} validation scenes.")
 
     # Capture all printed output
     stdout_original = sys.stdout
     results_capture = []
-    
+
     class CaptureOutput:
         def write(self, text):
             results_capture.append(text)
             stdout_original.write(text)
+
         def flush(self):
             stdout_original.flush()
-    
+
     sys.stdout = CaptureOutput()
 
     # ------------------------------
     # 2) Load CLIP model (once)
     # ------------------------------
     if model_name == "clip":
-        CLIP_MODEL = "ViT-B-16"                         
-        CLIP_PRETRAIN = "laion2b_s34b_b88k"             
+        CLIP_MODEL = "ViT-B-16"
+        CLIP_PRETRAIN = "laion2b_s34b_b88k"
         model, _, _ = open_clip.create_model_and_transforms(
             CLIP_MODEL, pretrained=CLIP_PRETRAIN
         )
         model = model.eval().to(device)
         tokenizer = open_clip.get_tokenizer(CLIP_MODEL)
     elif model_name == "siglip2":
-        siglip_spec = "siglip2-base-patch16-512"        
-        model = AutoModel.from_pretrained(f"google/{siglip_spec}")\
-                        .eval().to(device)
+        siglip_spec = "siglip2-base-patch16-512"
+        model = AutoModel.from_pretrained(f"google/{siglip_spec}").eval().to(device)
         tokenizer = AutoTokenizer.from_pretrained(f"google/{siglip_spec}")
     else:
         raise ValueError(f"Unsupported model name: {model_name}")
@@ -204,8 +238,9 @@ def main():
             text_feat /= text_feat.norm(dim=-1, keepdim=True)
             text_feat = text_feat.cpu()
         elif model_name == "siglip2":
-            inputs = tokenizer(text_prompts, padding="max_length",
-                               max_length=64, return_tensors="pt")
+            inputs = tokenizer(
+                text_prompts, padding="max_length", max_length=64, return_tensors="pt"
+            )
             inputs = {k: v.to(device) for k, v in inputs.items()}
             with torch.no_grad():
                 text_feat = model.get_text_features(**inputs)
@@ -230,25 +265,34 @@ def main():
         confusion_mat = np.zeros((num_classes, num_classes), dtype=np.int64)
 
         # Build ignore mask once
-        ignore_mask = np.array([name in ignore_classes for name in label_names], dtype=bool)
+        ignore_mask = np.array(
+            [name in ignore_classes for name in label_names], dtype=bool
+        )
 
         # ---- 3.2 Loop over scenes ----
         for scene_id in tqdm(scene_ids, desc="Scene", dynamic_ncols=True):
             # Paths to data
             scene_preproc_folder = os.path.join(args.preprocessed_root, "val", scene_id)
             if not os.path.isdir(scene_preproc_folder):
-                print(f"[Warning] Preprocessed folder not found: {scene_preproc_folder}")
+                print(
+                    f"[Warning] Preprocessed folder not found: {scene_preproc_folder}"
+                )
                 continue
 
             coord_path = os.path.join(scene_preproc_folder, "coord.npy")
-            segment_path = os.path.join(scene_preproc_folder, "segment20.npy" if bench_name == "ScanNet20" else "segment200.npy")
+            segment_path = os.path.join(
+                scene_preproc_folder,
+                "segment20.npy" if bench_name == "ScanNet20" else "segment200.npy",
+            )
             if not (os.path.isfile(coord_path) and os.path.isfile(segment_path)):
-                print(f"[Warning] Missing coord.npy or segment.npy at {scene_preproc_folder}")
+                print(
+                    f"[Warning] Missing coord.npy or segment.npy at {scene_preproc_folder}"
+                )
                 continue
 
-            coord = np.load(coord_path)               # (N, 3)
-            segment = np.load(segment_path)           # (N, 3) first col => label index
-            labeled_gt = segment#[:, 0]                
+            coord = np.load(coord_path)  # (N, 3)
+            segment = np.load(segment_path)  # (N, 3) first col => label index
+            labeled_gt = segment  # [:, 0]
             valid_mask = labeled_gt >= 0
             if valid_mask.sum() == 0:
                 continue
@@ -264,14 +308,18 @@ def main():
                 continue
             gauss_xyz, _ = read_ply_file_3dgs(ply_path)
 
-            langfeat_path = os.path.join(args.langfeat_root, scene_id, model_name, "features.npy")
+            langfeat_path = os.path.join(
+                args.langfeat_root, scene_id, model_name, "features.npy"
+            )
             if not os.path.isfile(langfeat_path):
                 print(f"[Warning] Language feature not found at {langfeat_path}")
                 continue
-            gauss_lang_feat = torch.from_numpy(np.load(langfeat_path)).float() # (G, 512)
+            gauss_lang_feat = torch.from_numpy(
+                np.load(langfeat_path)
+            ).float()  # (G, 512)
 
             norms = gauss_lang_feat.norm(dim=1)
-            keep_mask_gs = (norms > 0)
+            keep_mask_gs = norms > 0
             gauss_xyz = gauss_xyz[keep_mask_gs.numpy()]
             gauss_lang_feat = gauss_lang_feat[keep_mask_gs]
             if gauss_xyz.shape[0] == 0:
@@ -294,7 +342,9 @@ def main():
 
             # ---- 3.2.e Accumulate confusion ----
             for gt_c, pr_c in zip(gt_val, pred_label):
-                if gt_c < num_classes and pr_c < num_classes:  # guard against idx mismatch
+                if (
+                    gt_c < num_classes and pr_c < num_classes
+                ):  # guard against idx mismatch
                     confusion_mat[gt_c, pr_c] += 1
 
         # ------------------------------
@@ -317,7 +367,9 @@ def main():
 
         valid_mask = gt_class_counts > 0
         mean_iou = np.mean(np.array(ious)[valid_mask]) if valid_mask.any() else 0.0
-        mean_class_acc = np.mean(np.array(per_class_acc)[valid_mask]) if valid_mask.any() else 0.0
+        mean_class_acc = (
+            np.mean(np.array(per_class_acc)[valid_mask]) if valid_mask.any() else 0.0
+        )
 
         total_correct = np.trace(confusion_mat)
         total_count = confusion_mat.sum()
@@ -343,7 +395,7 @@ def main():
 
     # Restore stdout and save results to file
     sys.stdout = stdout_original
-    results_str = ''.join(results_capture)
+    results_str = "".join(results_capture)
     split_name = args.val_split_path.split("/")[-1].split(".")[0]
     log_path = f"logs/ludvig_3d_semseg_eval_{split_name}_{model_name}.txt"
     save_results_to_file(log_path, results_str, args)

@@ -1,14 +1,14 @@
 import torch
+
 # import pycolmap_scene_manager as pycolmap
 from typing import Literal
 import numpy as np
 from gsplat import rasterization
 
-from plyfile import PlyData, PlyElement
-import os 
+from plyfile import PlyData
+import os
 import json
-from pathlib import Path
-from PIL import Image
+
 
 def _detach_tensors_from_dict(d, inplace=True):
     if not inplace:
@@ -28,9 +28,14 @@ def load_ply(
 ):
     plydata = PlyData.read(ply_path)
 
-    xyz = np.stack((np.asarray(plydata.elements[0]["x"]),
-                    np.asarray(plydata.elements[0]["y"]),
-                    np.asarray(plydata.elements[0]["z"])),  axis=1)
+    xyz = np.stack(
+        (
+            np.asarray(plydata.elements[0]["x"]),
+            np.asarray(plydata.elements[0]["y"]),
+            np.asarray(plydata.elements[0]["z"]),
+        ),
+        axis=1,
+    )
     opacities = np.asarray(plydata.elements[0]["opacity"])[..., np.newaxis]
 
     features_dc = np.zeros((xyz.shape[0], 3, 1))
@@ -38,23 +43,31 @@ def load_ply(
     features_dc[:, 1, 0] = np.asarray(plydata.elements[0]["f_dc_1"])
     features_dc[:, 2, 0] = np.asarray(plydata.elements[0]["f_dc_2"])
 
-    extra_f_names = [p.name for p in plydata.elements[0].properties if p.name.startswith("f_rest_")]
-    extra_f_names = sorted(extra_f_names, key = lambda x: int(x.split('_')[-1]))
-    assert len(extra_f_names)==3*(max_sh_degree + 1) ** 2 - 3
+    extra_f_names = [
+        p.name for p in plydata.elements[0].properties if p.name.startswith("f_rest_")
+    ]
+    extra_f_names = sorted(extra_f_names, key=lambda x: int(x.split("_")[-1]))
+    assert len(extra_f_names) == 3 * (max_sh_degree + 1) ** 2 - 3
     features_extra = np.zeros((xyz.shape[0], len(extra_f_names)))
     for idx, attr_name in enumerate(extra_f_names):
         features_extra[:, idx] = np.asarray(plydata.elements[0][attr_name])
     # Reshape (P,F*SH_coeffs) to (P, F, SH_coeffs except DC)
-    features_extra = features_extra.reshape((features_extra.shape[0], 3, (max_sh_degree + 1) ** 2 - 1))
+    features_extra = features_extra.reshape(
+        (features_extra.shape[0], 3, (max_sh_degree + 1) ** 2 - 1)
+    )
 
-    scale_names = [p.name for p in plydata.elements[0].properties if p.name.startswith("scale_")]
-    scale_names = sorted(scale_names, key = lambda x: int(x.split('_')[-1]))
+    scale_names = [
+        p.name for p in plydata.elements[0].properties if p.name.startswith("scale_")
+    ]
+    scale_names = sorted(scale_names, key=lambda x: int(x.split("_")[-1]))
     scales = np.zeros((xyz.shape[0], len(scale_names)))
     for idx, attr_name in enumerate(scale_names):
         scales[:, idx] = np.asarray(plydata.elements[0][attr_name])
 
-    rot_names = [p.name for p in plydata.elements[0].properties if p.name.startswith("rot")]
-    rot_names = sorted(rot_names, key = lambda x: int(x.split('_')[-1]))
+    rot_names = [
+        p.name for p in plydata.elements[0].properties if p.name.startswith("rot")
+    ]
+    rot_names = sorted(rot_names, key=lambda x: int(x.split("_")[-1]))
     rots = np.zeros((xyz.shape[0], len(rot_names)))
     for idx, attr_name in enumerate(rot_names):
         rots[:, idx] = np.asarray(plydata.elements[0][attr_name])
@@ -62,8 +75,16 @@ def load_ply(
     splats = {
         "active_sh_degree": max_sh_degree,
         "means": torch.tensor(xyz).float().cuda(),
-        "features_dc": torch.tensor(features_dc).float().cuda().transpose(1, 2).contiguous(),
-        "features_rest": torch.tensor(features_extra).float().cuda().transpose(1, 2).contiguous(),
+        "features_dc": torch.tensor(features_dc)
+        .float()
+        .cuda()
+        .transpose(1, 2)
+        .contiguous(),
+        "features_rest": torch.tensor(features_extra)
+        .float()
+        .cuda()
+        .transpose(1, 2)
+        .contiguous(),
         "scaling": torch.tensor(scales).float().cuda(),
         "rotation": torch.tensor(rots).float().cuda(),
         "opacity": torch.tensor(opacities).float().cuda().squeeze(1),
@@ -75,11 +96,13 @@ def load_ply(
     #         print("min: {}, max: {}".format(value.min(), value.max()))
     _detach_tensors_from_dict(splats)
     if dataset == "scannetpp":
-        transform_json_file = os.path.join(data_dir, 'dslr', 'nerfstudio', 'lang_feat_selected_imgs.json')
+        transform_json_file = os.path.join(
+            data_dir, "dslr", "nerfstudio", "lang_feat_selected_imgs.json"
+        )
     elif dataset == "scannet" or dataset == "holicity":
-        transform_json_file = os.path.join(data_dir, 'lang_feat_selected_imgs.json')
+        transform_json_file = os.path.join(data_dir, "lang_feat_selected_imgs.json")
     elif dataset == "matterport":
-        transform_json_file = os.path.join(data_dir, 'lang_feat_selected_imgs.json')
+        transform_json_file = os.path.join(data_dir, "lang_feat_selected_imgs.json")
 
     splats["transform_json_file"] = transform_json_file
     # splats["colmap_project"] = colmap_project
@@ -90,17 +113,12 @@ def load_ply(
     # raise NotImplementedError("This is not used in the code, so not implemented")
 
 
-
-
-
-
 def load_checkpoint(
     checkpoint: str,
     data_dir: str,
     rasterizer: Literal["inria", "gsplat"] = "gsplat",
     data_factor: int = 1,
 ):
-
     colmap_project = pycolmap.SceneManager(f"{data_dir}/sparse/0")
     colmap_project.load_cameras()
     colmap_project.load_images()
@@ -118,7 +136,6 @@ def load_checkpoint(
             "opacity": model_params[6].squeeze(1),
         }
     elif rasterizer == "gsplat":
-
         model_params = model["splats"]
         splats = {
             "active_sh_degree": 3,
@@ -210,7 +227,6 @@ def get_viewmat_from_colmap_image(image):
 
 
 def prune_by_gradients_json(splats, inverse_extrinsics=True):
-
     frame_idx = 0
     means = splats["means"]
     colors_dc = splats["features_dc"]
@@ -229,7 +245,7 @@ def prune_by_gradients_json(splats, inverse_extrinsics=True):
         focal_len_x = contents["fl_x"] if "fl_x" in contents else contents["fx"]
         focal_len_y = contents["fl_y"] if "fl_y" in contents else contents["fy"]
 
-        cx = contents["cx"] 
+        cx = contents["cx"]
         cy = contents["cy"]
         if "crop_edge" in contents:
             cx -= contents["crop_edge"]
@@ -241,32 +257,39 @@ def prune_by_gradients_json(splats, inverse_extrinsics=True):
             # scannet case, fx, fy, cx, cy in scannet json are already for image size 640x480
             width, height = contents["resize"]
             if "crop_edge" in contents:
-                width -= 2*contents["crop_edge"]
-                height -= 2*contents["crop_edge"]
+                width -= 2 * contents["crop_edge"]
+                height -= 2 * contents["crop_edge"]
         else:
             # if not specify, we assume the weight and height are twice the cx and cy
-            width, height = cx * 2, cy * 2 
+            width, height = cx * 2, cy * 2
         frames = contents["frames"]
         for idx, frame in enumerate(frames):
             # NeRF 'transform_matrix' is a camera-to-world transform
             c2w = np.array(frame["transform_matrix"])
             # change from OpenGL/Blender camera axes (Y up, Z back) to COLMAP (Y down, Z forward)
-            applied_transform = np.array([
-                [0,  1,  0,  0],
-                [1,  0,  0,  0],
-                [0,  0, -1,  0],
-                [0,  0,  0,  1],
-            ], dtype=float)
+            applied_transform = np.array(
+                [
+                    [0, 1, 0, 0],
+                    [1, 0, 0, 0],
+                    [0, 0, -1, 0],
+                    [0, 0, 0, 1],
+                ],
+                dtype=float,
+            )
             c2w = np.dot(applied_transform, c2w)
             # get the world-to-camera transform and set R, T
             # w2c = c2w
-            if inverse_extrinsics: # some dataset save world-to-camera, some camera-to-world, careful!
+            if (
+                inverse_extrinsics
+            ):  # some dataset save world-to-camera, some camera-to-world, careful!
                 w2c = np.linalg.inv(c2w)
             else:
                 w2c = c2w
 
             w2c[1:3] *= -1
-            R = w2c[:3,:3] #np.transpose(w2c[:3,:3])  # R is stored transposed due to 'glm' in CUDA code
+            R = w2c[
+                :3, :3
+            ]  # np.transpose(w2c[:3,:3])  # R is stored transposed due to 'glm' in CUDA code
             T = w2c[:3, 3]
             # image_path = os.path.join(image_path, f'{cam_name + extension}')
             # image_name = Path(cam_name).stem
@@ -275,11 +298,11 @@ def prune_by_gradients_json(splats, inverse_extrinsics=True):
             viewmat[:3, 3] = torch.tensor(T).float()  # .to(device)
             resize_ratio = 0.5
             fx_resize = focal_len_x * resize_ratio
-            
+
             fy_resize = focal_len_y * resize_ratio
             cx_resize = cx * resize_ratio
             cy_resize = cy * resize_ratio
-            
+
             K = torch.tensor(
                 [
                     [fx_resize, 0, cx_resize],
@@ -316,7 +339,6 @@ def prune_by_gradients_json(splats, inverse_extrinsics=True):
             # output_debug_img = Image.fromarray(output_debug)
             # output_debug_img.save(f"/usr/bmicnas02/data-biwi-01/qimaqi_data/workspace/neurips_2025/3dgs-gradient-backprojection-benchmark/debug/debug_output_{frame_idx}.png")
 
-
             # print("output shape", output.shape, "min", output.min(), "max", output.max())
         mask = gaussian_grads > 0
         print("Total splats", len(gaussian_grads))
@@ -329,12 +351,11 @@ def prune_by_gradients_json(splats, inverse_extrinsics=True):
         splats["scaling"] = splats["scaling"][mask]
         splats["rotation"] = splats["rotation"][mask]
         splats["opacity"] = splats["opacity"][mask]
-    
+
     return splats
 
 
 def prune_by_gradients_opencv(splats, inverse_extrinsics=True):
-
     frame_idx = 0
     means = splats["means"]
     colors_dc = splats["features_dc"]
@@ -353,7 +374,7 @@ def prune_by_gradients_opencv(splats, inverse_extrinsics=True):
         focal_len_x = contents["fl_x"] if "fl_x" in contents else contents["fx"]
         focal_len_y = contents["fl_y"] if "fl_y" in contents else contents["fy"]
 
-        cx = contents["cx"] 
+        cx = contents["cx"]
         cy = contents["cy"]
         if "crop_edge" in contents:
             cx -= contents["crop_edge"]
@@ -365,13 +386,12 @@ def prune_by_gradients_opencv(splats, inverse_extrinsics=True):
             # scannet case, fx, fy, cx, cy in scannet json are already for image size 640x480
             width, height = contents["resize"]
             if "crop_edge" in contents:
-                width -= 2*contents["crop_edge"]
-                height -= 2*contents["crop_edge"]
+                width -= 2 * contents["crop_edge"]
+                height -= 2 * contents["crop_edge"]
         else:
             # if not specify, we assume the weight and height are twice the cx and cy
-            width, height = cx * 2, cy * 2 
+            width, height = cx * 2, cy * 2
         frames = contents["frames"]
-
 
         for idx, frame in enumerate(frames):
             # NeRF 'transform_matrix' is a camera-to-world transform
@@ -381,7 +401,7 @@ def prune_by_gradients_opencv(splats, inverse_extrinsics=True):
             # some dataset save world-to-camera, some camera-to-world, careful!
             w2c = np.linalg.inv(c2w)
             # w2c[1:3] *= -1
-            R = w2c[:3,:3]  # R is stored transposed due to 'glm' in CUDA code
+            R = w2c[:3, :3]  # R is stored transposed due to 'glm' in CUDA code
             T = w2c[:3, 3]
 
             viewmat = torch.eye(4).float()  # .to(device)
@@ -390,11 +410,11 @@ def prune_by_gradients_opencv(splats, inverse_extrinsics=True):
 
             # resize_ratio = 0.5
             # fx_resize = focal_len_x * resize_ratio
-            
+
             # fy_resize = focal_len_y * resize_ratio
             # cx_resize = cx * resize_ratio
             # cy_resize = cy * resize_ratio
-            
+
             K = torch.tensor(
                 [
                     [focal_len_x, 0, cx],
@@ -445,17 +465,17 @@ def prune_by_gradients_opencv(splats, inverse_extrinsics=True):
         splats["scaling"] = splats["scaling"][mask]
         splats["rotation"] = splats["rotation"][mask]
         splats["opacity"] = splats["opacity"][mask]
-    
+
     return splats
 
-def prune_by_gradients_matterport(splats, inverse_extrinsics=True):
 
+def prune_by_gradients_matterport(splats, inverse_extrinsics=True):
     frame_idx = 0
     means = splats["means"]
     colors_dc = splats["features_dc"]
     colors_rest = splats["features_rest"]
     colors = torch.cat([colors_dc, colors_rest], dim=1)
-    # print("colors shape", colors.shape) 
+    # print("colors shape", colors.shape)
     # print("colors_rest shape", colors_rest.shape)
     # print("colors[:, 0, :] shape", colors[:, 0, :].shape)
 
@@ -472,7 +492,7 @@ def prune_by_gradients_matterport(splats, inverse_extrinsics=True):
         # focal_len_x = contents["fl_x"] if "fl_x" in contents else contents["fx"]
         # focal_len_y = contents["fl_y"] if "fl_y" in contents else contents["fy"]
 
-        # cx = contents["cx"] 
+        # cx = contents["cx"]
         # cy = contents["cy"]
         # if "crop_edge" in contents:
         #     cx -= contents["crop_edge"]
@@ -488,7 +508,7 @@ def prune_by_gradients_matterport(splats, inverse_extrinsics=True):
         #         height -= 2*contents["crop_edge"]
         # else:
         #     # if not specify, we assume the weight and height are twice the cx and cy
-        #     width, height = cx * 2, cy * 2 
+        #     width, height = cx * 2, cy * 2
         frames = contents["frames"]
         width = contents["width"]
         height = contents["height"]
@@ -503,7 +523,6 @@ def prune_by_gradients_matterport(splats, inverse_extrinsics=True):
             cx = frame["cx"]
             cy = frame["cy"]
 
-
             # NeRF 'transform_matrix' is a camera-to-world transform
             c2w = np.array(frame["transform_matrix"])
             # get the world-to-camera transform and set R, T
@@ -511,7 +530,7 @@ def prune_by_gradients_matterport(splats, inverse_extrinsics=True):
             # some dataset save world-to-camera, some camera-to-world, careful!
             w2c = np.linalg.inv(c2w)
             # w2c[1:3] *= -1
-            R = w2c[:3,:3]  # R is stored transposed due to 'glm' in CUDA code
+            R = w2c[:3, :3]  # R is stored transposed due to 'glm' in CUDA code
             T = w2c[:3, 3]
 
             viewmat = torch.eye(4).float()  # .to(device)
@@ -520,11 +539,11 @@ def prune_by_gradients_matterport(splats, inverse_extrinsics=True):
 
             # resize_ratio = 0.5
             # fx_resize = focal_len_x * resize_ratio
-            
+
             # fy_resize = focal_len_y * resize_ratio
             # cx_resize = cx * resize_ratio
             # cy_resize = cy * resize_ratio
-            
+
             K = torch.tensor(
                 [
                     [fx, 0, cx],
@@ -575,11 +594,11 @@ def prune_by_gradients_matterport(splats, inverse_extrinsics=True):
         splats["scaling"] = splats["scaling"][mask]
         splats["rotation"] = splats["rotation"][mask]
         splats["opacity"] = splats["opacity"][mask]
-    
+
     return splats
 
-def prune_by_gradients_holicity(splats, inverse_extrinsics=True):
 
+def prune_by_gradients_holicity(splats, inverse_extrinsics=True):
     frame_idx = 0
     means = splats["means"]
     colors_dc = splats["features_dc"]
@@ -591,8 +610,8 @@ def prune_by_gradients_holicity(splats, inverse_extrinsics=True):
     # colors_dc shape torch.Size([800000, 1, 3])
     # colors_rest shape torch.Size([800000, 0, 3])
     # colors shape torch.Size([800000, 1, 3])
-    opacities = torch.sigmoid(splats["opacity"]) 
-    scales = torch.exp(splats["scaling"]) 
+    opacities = torch.sigmoid(splats["opacity"])
+    scales = torch.exp(splats["scaling"])
     quats = splats["rotation"]
     # K = splats["camera_matrix"]
     colors.requires_grad = True
@@ -609,14 +628,13 @@ def prune_by_gradients_holicity(splats, inverse_extrinsics=True):
     # opacities shape torch.Size([800000]) min tensor(0.0050, device='cuda:0') max tensor(1., device='cuda:0')
     # colors shape torch.Size([800000, 1, 3]) min tensor(-1.8541, device='cuda:0', grad_fn=<MinBackward1>) max tensor(10.2139, device='cuda:0', grad_fn=<MaxBackward1>)
 
-
     transformsfile = splats["transform_json_file"]
     with open(transformsfile) as json_file:
         contents = json.load(json_file)
         focal_len_x = contents["fl_x"] if "fl_x" in contents else contents["fx"]
         focal_len_y = contents["fl_y"] if "fl_y" in contents else contents["fy"]
 
-        cx = contents["cx"] 
+        cx = contents["cx"]
         cy = contents["cy"]
         # if "crop_edge" in contents:
         #     cx -= contents["crop_edge"]
@@ -632,12 +650,11 @@ def prune_by_gradients_holicity(splats, inverse_extrinsics=True):
         #         height -= 2*contents["crop_edge"]
         # else:
         #     # if not specify, we assume the weight and height are twice the cx and cy
-        #     width, height = cx * 2, cy * 2 
+        #     width, height = cx * 2, cy * 2
         width = contents["width"]
         height = contents["height"]
-        
-        frames = contents["frames"]
 
+        frames = contents["frames"]
 
         for idx, frame in enumerate(frames):
             # NeRF 'transform_matrix' is a camera-to-world transform
@@ -647,7 +664,7 @@ def prune_by_gradients_holicity(splats, inverse_extrinsics=True):
             # some dataset save world-to-camera, some camera-to-world, careful!
             w2c = np.linalg.inv(c2w)
             # w2c[1:3] *= -1
-            R = w2c[:3,:3]  # R is stored transposed due to 'glm' in CUDA code
+            R = w2c[:3, :3]  # R is stored transposed due to 'glm' in CUDA code
             T = w2c[:3, 3]
 
             viewmat = torch.eye(4).float()  # .to(device)
@@ -656,11 +673,11 @@ def prune_by_gradients_holicity(splats, inverse_extrinsics=True):
 
             # resize_ratio = 0.5
             # fx_resize = focal_len_x * resize_ratio
-            
+
             # fy_resize = focal_len_y * resize_ratio
             # cx_resize = cx * resize_ratio
             # cy_resize = cy * resize_ratio
-            
+
             K = torch.tensor(
                 [
                     [focal_len_x, 0, cx],
@@ -701,7 +718,7 @@ def prune_by_gradients_holicity(splats, inverse_extrinsics=True):
             #     absgrad=False,
             #     radius_clip=0.0,
             # )
-        
+
             frame_idx += 1
             pseudo_loss = ((output.detach() + 1 - output) ** 2).mean()
             pseudo_loss.backward()
@@ -732,9 +749,8 @@ def prune_by_gradients_holicity(splats, inverse_extrinsics=True):
         splats["scaling"] = splats["scaling"][mask]
         splats["rotation"] = splats["rotation"][mask]
         splats["opacity"] = splats["opacity"][mask]
-    
-    return splats
 
+    return splats
 
 
 def prune_by_gradients(splats):
@@ -802,6 +818,7 @@ def torch_to_cv(tensor, permute=False):
     else:
         tensor = torch.clamp(tensor, 0, 1).cpu().numpy()
     return (tensor * 255).astype(np.uint8)[..., ::-1]
+
 
 def test_proper_pruning(splats, splats_after_pruning):
     colmap_project = splats["colmap_project"]
@@ -903,7 +920,7 @@ def test_proper_pruning_json(splats, splats_after_pruning, inverse_extrinsics=Tr
         focal_len_x = contents["fl_x"] if "fl_x" in contents else contents["fx"]
         focal_len_y = contents["fl_y"] if "fl_y" in contents else contents["fy"]
 
-        cx = contents["cx"] 
+        cx = contents["cx"]
         cy = contents["cy"]
         if "crop_edge" in contents:
             cx -= contents["crop_edge"]
@@ -915,32 +932,39 @@ def test_proper_pruning_json(splats, splats_after_pruning, inverse_extrinsics=Tr
             # scannet case, fx, fy, cx, cy in scannet json are already for image size 640x480
             width, height = contents["resize"]
             if "crop_edge" in contents:
-                width -= 2*contents["crop_edge"]
-                height -= 2*contents["crop_edge"]
+                width -= 2 * contents["crop_edge"]
+                height -= 2 * contents["crop_edge"]
         else:
             # if not specify, we assume the weight and height are twice the cx and cy
-            width, height = cx * 2, cy * 2 
+            width, height = cx * 2, cy * 2
         frames = contents["frames"]
         for idx, frame in enumerate(frames):
             # NeRF 'transform_matrix' is a camera-to-world transform
             c2w = np.array(frame["transform_matrix"])
             # change from OpenGL/Blender camera axes (Y up, Z back) to COLMAP (Y down, Z forward)
-            applied_transform = np.array([
-                [0,  1,  0,  0],
-                [1,  0,  0,  0],
-                [0,  0, -1,  0],
-                [0,  0,  0,  1],
-            ], dtype=float)
+            applied_transform = np.array(
+                [
+                    [0, 1, 0, 0],
+                    [1, 0, 0, 0],
+                    [0, 0, -1, 0],
+                    [0, 0, 0, 1],
+                ],
+                dtype=float,
+            )
             c2w = np.dot(applied_transform, c2w)
             # get the world-to-camera transform and set R, T
             # w2c = c2w
-            if inverse_extrinsics: # some dataset save world-to-camera, some camera-to-world, careful!
+            if (
+                inverse_extrinsics
+            ):  # some dataset save world-to-camera, some camera-to-world, careful!
                 w2c = np.linalg.inv(c2w)
             else:
                 w2c = c2w
 
             w2c[1:3] *= -1
-            R = w2c[:3,:3] #np.transpose(w2c[:3,:3])  # R is stored transposed due to 'glm' in CUDA code
+            R = w2c[
+                :3, :3
+            ]  # np.transpose(w2c[:3,:3])  # R is stored transposed due to 'glm' in CUDA code
             T = w2c[:3, 3]
             # image_path = os.path.join(image_path, f'{cam_name + extension}')
             # image_name = Path(cam_name).stem
@@ -949,11 +973,11 @@ def test_proper_pruning_json(splats, splats_after_pruning, inverse_extrinsics=Tr
             viewmat[:3, 3] = torch.tensor(T).float()  # .to(device)
             resize_ratio = 0.5
             fx_resize = focal_len_x * resize_ratio
-            
+
             fy_resize = focal_len_y * resize_ratio
             cx_resize = cx * resize_ratio
             cy_resize = cy * resize_ratio
-            
+
             K = torch.tensor(
                 [
                     [fx_resize, 0, cx_resize],
@@ -1011,8 +1035,6 @@ def test_proper_pruning_json(splats, splats_after_pruning, inverse_extrinsics=Tr
         )
 
 
-
-
 def test_proper_pruning_opencv(splats, splats_after_pruning, inverse_extrinsics=True):
     # colmap_project = splats["colmap_project"]
     frame_idx = 0
@@ -1042,7 +1064,7 @@ def test_proper_pruning_opencv(splats, splats_after_pruning, inverse_extrinsics=
         focal_len_x = contents["fl_x"] if "fl_x" in contents else contents["fx"]
         focal_len_y = contents["fl_y"] if "fl_y" in contents else contents["fy"]
 
-        cx = contents["cx"] 
+        cx = contents["cx"]
         cy = contents["cy"]
         if "crop_edge" in contents:
             cx -= contents["crop_edge"]
@@ -1054,11 +1076,11 @@ def test_proper_pruning_opencv(splats, splats_after_pruning, inverse_extrinsics=
             # scannet case, fx, fy, cx, cy in scannet json are already for image size 640x480
             width, height = contents["resize"]
             if "crop_edge" in contents:
-                width -= 2*contents["crop_edge"]
-                height -= 2*contents["crop_edge"]
+                width -= 2 * contents["crop_edge"]
+                height -= 2 * contents["crop_edge"]
         else:
             # if not specify, we assume the weight and height are twice the cx and cy
-            width, height = cx * 2, cy * 2 
+            width, height = cx * 2, cy * 2
         frames = contents["frames"]
         for idx, frame in enumerate(frames):
             # NeRF 'transform_matrix' is a camera-to-world transform
@@ -1068,7 +1090,7 @@ def test_proper_pruning_opencv(splats, splats_after_pruning, inverse_extrinsics=
             # some dataset save world-to-camera, some camera-to-world, careful!
             w2c = np.linalg.inv(c2w)
             # w2c[1:3] *= -1
-            R = w2c[:3,:3]  # R is stored transposed due to 'glm' in CUDA code
+            R = w2c[:3, :3]  # R is stored transposed due to 'glm' in CUDA code
             T = w2c[:3, 3]
 
             viewmat = torch.eye(4).float()  # .to(device)
@@ -1078,11 +1100,10 @@ def test_proper_pruning_opencv(splats, splats_after_pruning, inverse_extrinsics=
             # image_name = Path(cam_name).stem
             # resize_ratio = resize[1] / (640 - 2 * contents["crop_edge"]) if "crop_edge" in contents else 0
             # fx_resize = focal_len_x * resize_ratio
-            
+
             # fy_resize = focal_len_y * resize_ratio
             # cx_resize = cx * resize_ratio
             # cy_resize = cy * resize_ratio
-
 
             K = torch.tensor(
                 [
@@ -1141,9 +1162,9 @@ def test_proper_pruning_opencv(splats, splats_after_pruning, inverse_extrinsics=
         )
 
 
-
-
-def test_proper_pruning_matterport(splats, splats_after_pruning, inverse_extrinsics=True):
+def test_proper_pruning_matterport(
+    splats, splats_after_pruning, inverse_extrinsics=True
+):
     # colmap_project = splats["colmap_project"]
     frame_idx = 0
     means = splats["means"]
@@ -1172,7 +1193,7 @@ def test_proper_pruning_matterport(splats, splats_after_pruning, inverse_extrins
         # focal_len_x = contents["fl_x"] if "fl_x" in contents else contents["fx"]
         # focal_len_y = contents["fl_y"] if "fl_y" in contents else contents["fy"]
 
-        # cx = contents["cx"] 
+        # cx = contents["cx"]
         # cy = contents["cy"]
         # if "crop_edge" in contents:
         #     cx -= contents["crop_edge"]
@@ -1188,7 +1209,7 @@ def test_proper_pruning_matterport(splats, splats_after_pruning, inverse_extrins
         #         height -= 2*contents["crop_edge"]
         # else:
         #     # if not specify, we assume the weight and height are twice the cx and cy
-        #     width, height = cx * 2, cy * 2 
+        #     width, height = cx * 2, cy * 2
         frames = contents["frames"]
         width = contents["width"]
         height = contents["height"]
@@ -1203,14 +1224,13 @@ def test_proper_pruning_matterport(splats, splats_after_pruning, inverse_extrins
             cx = frame["cx"]
             cy = frame["cy"]
 
-            
             c2w = np.array(frame["transform_matrix"])
             # get the world-to-camera transform and set R, T
             # w2c = c2w
             # some dataset save world-to-camera, some camera-to-world, careful!
             w2c = np.linalg.inv(c2w)
             # w2c[1:3] *= -1
-            R = w2c[:3,:3]  # R is stored transposed due to 'glm' in CUDA code
+            R = w2c[:3, :3]  # R is stored transposed due to 'glm' in CUDA code
             T = w2c[:3, 3]
 
             viewmat = torch.eye(4).float()  # .to(device)
@@ -1220,11 +1240,10 @@ def test_proper_pruning_matterport(splats, splats_after_pruning, inverse_extrins
             # image_name = Path(cam_name).stem
             # resize_ratio = resize[1] / (640 - 2 * contents["crop_edge"]) if "crop_edge" in contents else 0
             # fx_resize = focal_len_x * resize_ratio
-            
+
             # fy_resize = focal_len_y * resize_ratio
             # cx_resize = cx * resize_ratio
             # cy_resize = cy * resize_ratio
-
 
             K = torch.tensor(
                 [
@@ -1283,9 +1302,6 @@ def test_proper_pruning_matterport(splats, splats_after_pruning, inverse_extrins
         )
 
 
-
-
-
 def test_proper_pruning_holicity(splats, splats_after_pruning, inverse_extrinsics=True):
     # colmap_project = splats["colmap_project"]
     frame_idx = 0
@@ -1315,7 +1331,7 @@ def test_proper_pruning_holicity(splats, splats_after_pruning, inverse_extrinsic
         focal_len_x = contents["fl_x"] if "fl_x" in contents else contents["fx"]
         focal_len_y = contents["fl_y"] if "fl_y" in contents else contents["fy"]
 
-        cx = contents["cx"] 
+        cx = contents["cx"]
         cy = contents["cy"]
         # if "crop_edge" in contents:
         #     cx -= contents["crop_edge"]
@@ -1331,12 +1347,11 @@ def test_proper_pruning_holicity(splats, splats_after_pruning, inverse_extrinsic
         #         height -= 2*contents["crop_edge"]
         # else:
         #     # if not specify, we assume the weight and height are twice the cx and cy
-        #     width, height = cx * 2, cy * 2 
+        #     width, height = cx * 2, cy * 2
         width = contents["width"]
         height = contents["height"]
-        
-        frames = contents["frames"]
 
+        frames = contents["frames"]
 
         for idx, frame in enumerate(frames):
             # NeRF 'transform_matrix' is a camera-to-world transform
@@ -1346,13 +1361,12 @@ def test_proper_pruning_holicity(splats, splats_after_pruning, inverse_extrinsic
             # some dataset save world-to-camera, some camera-to-world, careful!
             w2c = np.linalg.inv(c2w)
             # w2c[1:3] *= -1
-            R = w2c[:3,:3]  # R is stored transposed due to 'glm' in CUDA code
+            R = w2c[:3, :3]  # R is stored transposed due to 'glm' in CUDA code
             T = w2c[:3, 3]
 
             viewmat = torch.eye(4).float()  # .to(device)
             viewmat[:3, :3] = torch.tensor(R).float()  # .to(device)
             viewmat[:3, 3] = torch.tensor(T).float()  # .to(device)
-
 
             viewmat = torch.eye(4).float()  # .to(device)
             viewmat[:3, :3] = torch.tensor(R).float()  # .to(device)
@@ -1361,11 +1375,10 @@ def test_proper_pruning_holicity(splats, splats_after_pruning, inverse_extrinsic
             # image_name = Path(cam_name).stem
             # resize_ratio = resize[1] / (640 - 2 * contents["crop_edge"]) if "crop_edge" in contents else 0
             # fx_resize = focal_len_x * resize_ratio
-            
+
             # fy_resize = focal_len_y * resize_ratio
             # cx_resize = cx * resize_ratio
             # cy_resize = cy * resize_ratio
-
 
             K = torch.tensor(
                 [
@@ -1422,4 +1435,3 @@ def test_proper_pruning_holicity(splats, splats_after_pruning, inverse_extrinsic
                 percentage_pruned, max_pixel_error, total_error
             )
         )
-

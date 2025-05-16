@@ -6,14 +6,14 @@ from pathlib import Path
 from PIL import Image
 import zipfile
 from typing import Literal, Dict, Any
-from datasets.colmap_read_write import read_images_text
 from utils import compute_intrinsics_matrix
+
 
 class HypersimDataset(torch.utils.data.Dataset):
     def __init__(
         self,
         data_root: str,
-        split: Literal["train", "val", "test", 'all'],
+        split: Literal["train", "val", "test", "all"],
         load_depth: bool = True,
     ):
         self.meta = {}
@@ -69,9 +69,9 @@ class HypersimDataset(torch.utils.data.Dataset):
     def _init_zip_refs(self):
         if self.meta["zipped"]:
             if self.zip_ref is None and self.image_zip_path is not None:
-                self.zip_ref = zipfile.ZipFile(self.image_zip_path, 'r')
+                self.zip_ref = zipfile.ZipFile(self.image_zip_path, "r")
             if self.depth_zip_ref is None and self.depth_zip_path is not None:
-                self.depth_zip_ref = zipfile.ZipFile(self.depth_zip_path, 'r')
+                self.depth_zip_ref = zipfile.ZipFile(self.depth_zip_path, "r")
 
     def _load_image(self, image_name: str) -> Image.Image:
         if self.image_zip_path:
@@ -104,7 +104,7 @@ class HypersimDataset(torch.utils.data.Dataset):
         img_tensor = img_tensor / self.depth_scale
         if self.crop_edge > 0:
             img_tensor = img_tensor[
-                self.crop_edge: -self.crop_edge, self.crop_edge: -self.crop_edge
+                self.crop_edge : -self.crop_edge, self.crop_edge : -self.crop_edge
             ]
 
         return img_tensor
@@ -136,8 +136,7 @@ class HypersimDataset(torch.utils.data.Dataset):
         img = np.array(img.convert("RGB"))  # Ensure RGB format
 
         # Update the intrinsic matrix
-        intrinsics = compute_intrinsics_matrix(
-            self.fx, self.fy, self.cx, self.cy)
+        intrinsics = compute_intrinsics_matrix(self.fx, self.fy, self.cx, self.cy)
 
         # Convert the image to tensor
         img_tensor = torch.from_numpy(img).float()

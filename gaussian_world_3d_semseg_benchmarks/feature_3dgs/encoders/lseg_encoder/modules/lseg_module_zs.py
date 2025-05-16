@@ -1,20 +1,7 @@
-import re
-import torch
-import torch.nn as nn
-import torchvision.transforms as transforms
 from argparse import ArgumentParser
-import pytorch_lightning as pl
 from .lsegmentation_module_zs import LSegmentationModuleZS
 from .models.lseg_net_zs import LSegNetZS, LSegRNNetZS
-from encoding.models.sseg.base import up_kwargs
 import os
-import clip
-import numpy as np
-from scipy import signal
-import glob
-from PIL import Image
-import matplotlib.pyplot as plt
-import pandas as pd
 
 
 class LSegModuleZS(LSegmentationModuleZS):
@@ -26,9 +13,9 @@ class LSegModuleZS(LSegmentationModuleZS):
         self.len_dataloader = len(label_list)
 
         # print(kwargs)
-        if kwargs["use_pretrained"] in ['False', False]:
+        if kwargs["use_pretrained"] in ["False", False]:
             use_pretrained = False
-        elif kwargs["use_pretrained"] in ['True', True]:
+        elif kwargs["use_pretrained"] in ["True", True]:
             use_pretrained = True
 
         if kwargs["backbone"] in ["clip_resnet101"]:
@@ -56,11 +43,11 @@ class LSegModuleZS(LSegmentationModuleZS):
 
     def get_labels(self, dataset):
         labels = []
-        path = 'label_files/fewshot_{}.txt'.format(dataset)
-        assert os.path.exists(path), '*** Error : {} not exist !!!'.format(path)
-        f = open(path, 'r') 
-        lines = f.readlines()      
-        for line in lines: 
+        path = "label_files/fewshot_{}.txt".format(dataset)
+        assert os.path.exists(path), "*** Error : {} not exist !!!".format(path)
+        f = open(path, "r")
+        lines = f.readlines()
+        for line in lines:
             label = line.strip()
             labels.append(label)
         f.close()
@@ -140,7 +127,7 @@ class LSegModuleZS(LSegmentationModuleZS):
 
         parser.add_argument(
             "--activation",
-            choices=['relu', 'lrelu', 'tanh'],
+            choices=["relu", "lrelu", "tanh"],
             default="relu",
             help="use which activation to activate the block",
         )

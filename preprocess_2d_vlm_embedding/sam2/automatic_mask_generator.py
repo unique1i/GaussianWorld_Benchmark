@@ -228,7 +228,7 @@ class SAM2AutomaticMaskGenerator:
         image: np.ndarray,
         debug: bool = False,
     ) -> MaskData:
-        """ debug flag here overrides the instance default if passed """
+        """debug flag here overrides the instance default if passed"""
         debug = self.debug if debug is None else debug
 
         orig_size = image.shape[:2]
@@ -239,7 +239,9 @@ class SAM2AutomaticMaskGenerator:
         data = MaskData()
         for crop_box, layer_idx in zip(crop_boxes, layer_idxs):
             if debug:
-                print(f"[DEBUG][_generate_masks] → crop_box={crop_box}, layer={layer_idx}")
+                print(
+                    f"[DEBUG][_generate_masks] → crop_box={crop_box}, layer={layer_idx}"
+                )
             crop_data = self._process_crop(
                 image, crop_box, layer_idx, orig_size, debug=debug
             )
@@ -248,7 +250,9 @@ class SAM2AutomaticMaskGenerator:
         # cross‐crop NMS
         if len(data["rles"]) == 0:
             if debug:
-                print("[DEBUG][_generate_masks] → no masks found, skipping cross‐crop NMS")
+                print(
+                    "[DEBUG][_generate_masks] → no masks found, skipping cross‐crop NMS"
+                )
             return data
         if len(crop_boxes) > 1:
             scores = 1 / box_area(data["crop_boxes"])
@@ -260,12 +264,14 @@ class SAM2AutomaticMaskGenerator:
                 iou_threshold=self.crop_nms_thresh,
             )
             if debug:
-                print(f"[DEBUG][_generate_masks] kept {len(keep)}/{len(data['rles'])} after cross‐crop NMS")
+                print(
+                    f"[DEBUG][_generate_masks] kept {len(keep)}/{len(data['rles'])} after cross‐crop NMS"
+                )
             data.filter(keep)
 
         data.to_numpy()
         return data
-    
+
     def _process_crop(
         self,
         image: np.ndarray,
@@ -286,15 +292,21 @@ class SAM2AutomaticMaskGenerator:
         points_scale = np.array(cropped_im_size)[None, ::-1]
         points_for_image = self.point_grids[crop_layer_idx] * points_scale
         if debug:
-            print(f"[DEBUG][_process_crop] points_for_image.shape={points_for_image.shape}")
+            print(
+                f"[DEBUG][_process_crop] points_for_image.shape={points_for_image.shape}"
+            )
 
         data = MaskData()
-        for batch_idx, (points,) in enumerate(batch_iterator(self.points_per_batch, points_for_image)):
+        for batch_idx, (points,) in enumerate(
+            batch_iterator(self.points_per_batch, points_for_image)
+        ):
             batch_data = self._process_batch(
                 points, cropped_im_size, crop_box, orig_size, normalize=True
             )
             if debug:
-                print(f"[DEBUG][_process_crop]   batch {batch_idx}: got {len(batch_data['rles'])} masks")
+                print(
+                    f"[DEBUG][_process_crop]   batch {batch_idx}: got {len(batch_data['rles'])} masks"
+                )
             data.cat(batch_data)
             del batch_data
 
@@ -302,7 +314,9 @@ class SAM2AutomaticMaskGenerator:
 
         if len(data["rles"]) == 0:
             if debug:
-                print("[DEBUG][_process_crop] → no masks found, skipping intra‐crop NMS")
+                print(
+                    "[DEBUG][_process_crop] → no masks found, skipping intra‐crop NMS"
+                )
 
         # intra‐crop NMS
         keep_by_nms = batched_nms(
@@ -312,7 +326,9 @@ class SAM2AutomaticMaskGenerator:
             iou_threshold=self.box_nms_thresh,
         )
         if debug:
-            print(f"[DEBUG][_process_crop] → kept {len(keep_by_nms)}/{len(data['rles'])} after intra‐crop NMS")
+            print(
+                f"[DEBUG][_process_crop] → kept {len(keep_by_nms)}/{len(data['rles'])} after intra‐crop NMS"
+            )
         data.filter(keep_by_nms)
 
         # uncrop back to full image coords
@@ -357,8 +373,8 @@ class SAM2AutomaticMaskGenerator:
         #     low_res_masks=low_res_masks.flatten(0, 1),
         # )
         data = MaskData(
-            masks=masks[:,2,:,:],
-            iou_preds=iou_preds[:,2],
+            masks=masks[:, 2, :, :],
+            iou_preds=iou_preds[:, 2],
             points=torch.as_tensor(points),
         )
         del masks

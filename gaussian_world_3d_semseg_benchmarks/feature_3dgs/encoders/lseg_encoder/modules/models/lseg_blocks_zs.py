@@ -5,8 +5,8 @@ from .lseg_vit_zs import (
     _make_pretrained_clip_vitl16_384,
     _make_pretrained_clip_vitb32_384,
     _make_pretrained_clip_rn101,
-    forward_vit,
 )
+
 
 def _make_encoder(
     backbone,
@@ -19,8 +19,8 @@ def _make_encoder(
     use_vit_only=False,
     use_readout="ignore",
     enable_attention_hooks=False,
-):  
-    if backbone == "clip_vitl16_384": 
+):
+    if backbone == "clip_vitl16_384":
         clip_pretrained, pretrained = _make_pretrained_clip_vitl16_384(
             use_pretrained,
             hooks=hooks,
@@ -29,19 +29,19 @@ def _make_encoder(
         )
         scratch = _make_scratch(
             [256, 512, 1024, 1024], features, groups=groups, expand=expand
-        ) 
+        )
     elif backbone == "clip_vitb32_384":
         clip_pretrained, pretrained = _make_pretrained_clip_vitb32_384(
-            use_pretrained, 
-            hooks=hooks, 
+            use_pretrained,
+            hooks=hooks,
             use_readout=use_readout,
         )
         scratch = _make_scratch(
             [96, 192, 384, 768], features, groups=groups, expand=expand
-        ) 
+        )
     elif backbone == "clip_resnet101":
         clip_pretrained, pretrained = _make_pretrained_clip_rn101(
-            use_pretrained, 
+            use_pretrained,
         )
         scratch = _make_scratch(
             [256, 512, 1024, 2048], features, groups=groups, expand=expand
@@ -370,4 +370,3 @@ class FeatureFusionBlock_custom(nn.Module):
         output = self.out_conv(output)
 
         return output
-

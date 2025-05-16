@@ -4,16 +4,15 @@ import json
 import torch.utils.data
 from pathlib import Path
 from PIL import Image
-import zipfile
 from typing import Literal, Dict, Any
-from datasets.colmap_read_write import read_images_text
 from utils import compute_intrinsics_matrix
+
 
 class ReplicaDataset(torch.utils.data.Dataset):
     def __init__(
         self,
         data_root: str,
-        split: Literal["train", "val", "test", 'all'],
+        split: Literal["train", "val", "test", "all"],
         load_depth: bool = True,
     ):
         self.meta = {}
@@ -47,7 +46,6 @@ class ReplicaDataset(torch.utils.data.Dataset):
         self.image_zip_path = self.data_root / "results"
         self.depth_zip_path = self.data_root / "results"
 
-
         for frame in self.meta["frames"]:
             self.image_paths.append(frame["file_path"])
             self.poses.append(np.array(frame["transform_matrix"]))
@@ -58,15 +56,14 @@ class ReplicaDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.image_paths)
 
-
     def _load_image(self, image_name: str) -> Image.Image:
         img_path = self.image_zip_path / image_name
         img = Image.open(img_path)
         return img
 
     def _load_depth(self, image_name: str):
-        depth_name = image_name.replace('frame','depth')
-        depth_name = depth_name.replace('.jpg','.png')
+        depth_name = image_name.replace("frame", "depth")
+        depth_name = depth_name.replace(".jpg", ".png")
         # Handle the case where depth images are not zipped
         img_path = self.depth_zip_path / depth_name
         img = Image.open(img_path)
@@ -74,7 +71,7 @@ class ReplicaDataset(torch.utils.data.Dataset):
         img_tensor = img_tensor / self.depth_scale
         if self.crop_edge > 0:
             img_tensor = img_tensor[
-                self.crop_edge: -self.crop_edge, self.crop_edge: -self.crop_edge
+                self.crop_edge : -self.crop_edge, self.crop_edge : -self.crop_edge
             ]
 
         return img_tensor
@@ -106,8 +103,7 @@ class ReplicaDataset(torch.utils.data.Dataset):
         img = np.array(img.convert("RGB"))  # Ensure RGB format
 
         # Update the intrinsic matrix
-        intrinsics = compute_intrinsics_matrix(
-            self.fx, self.fy, self.cx, self.cy)
+        intrinsics = compute_intrinsics_matrix(self.fx, self.fy, self.cx, self.cy)
 
         # Convert the image to tensor
         img_tensor = torch.from_numpy(img).float()

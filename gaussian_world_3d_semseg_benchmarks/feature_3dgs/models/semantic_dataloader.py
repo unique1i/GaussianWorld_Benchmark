@@ -1,7 +1,5 @@
-import torch
-from torch import nn
-import torch.nn.functional as F
 from torch.utils.data import Dataset
+
 
 # Define a custom dataset that can handle variable-size data
 class VariableSizeDataset(Dataset):
@@ -19,4 +17,3 @@ class VariableSizeDataset(Dataset):
     def __getitem__(self, idx):
         # This method retrieves the ith sample
         return self.data[idx]
-

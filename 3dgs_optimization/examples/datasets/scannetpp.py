@@ -9,6 +9,7 @@ from typing import Literal, Dict, Any
 from datasets.colmap_read_write import read_images_text
 from utils import compute_intrinsics_matrix
 
+
 class ScannetppDataset(torch.utils.data.Dataset):
     def __init__(
         self,
@@ -16,7 +17,7 @@ class ScannetppDataset(torch.utils.data.Dataset):
         split: Literal["train", "test", "train+test"] = "train+test",
         load_depth: bool = True,
         exclude_blur_imgs: bool = True,
-        zipped: bool = True, 
+        zipped: bool = True,
     ):
         self.meta = {}
         self.split = split
@@ -93,7 +94,9 @@ class ScannetppDataset(torch.utils.data.Dataset):
     def _load_image(self, image_name: str) -> Image.Image:
         image_name = "undistorted_images/" + image_name
         if self.zipped:
-            assert self.image_zip_path.exists(), f"Zip file not found: {self.image_zip_path}"
+            assert (
+                self.image_zip_path.exists()
+            ), f"Zip file not found: {self.image_zip_path}"
             self._init_zip_refs()
             with self.zip_ref.open(image_name) as file:
                 img = Image.open(file)
@@ -106,7 +109,9 @@ class ScannetppDataset(torch.utils.data.Dataset):
     def _load_depth(self, image_name: str):
         image_name = "undistorted_depths/" + image_name
         if self.zipped:
-            assert self.depth_zip_path.exists(), f"Zip file not found: {self.depth_zip_path}"
+            assert (
+                self.depth_zip_path.exists()
+            ), f"Zip file not found: {self.depth_zip_path}"
             self._init_zip_refs()
             image_name = image_name.replace("JPG", "png")
             image_name = image_name.replace("images", "depths")

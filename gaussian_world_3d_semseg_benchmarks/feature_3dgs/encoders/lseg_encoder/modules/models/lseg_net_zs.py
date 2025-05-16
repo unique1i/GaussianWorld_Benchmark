@@ -1,24 +1,25 @@
-import math
-import types
-
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
-from .lseg_blocks_zs import FeatureFusionBlock, Interpolate, _make_encoder, FeatureFusionBlock_custom, forward_vit
+from .lseg_blocks_zs import (
+    Interpolate,
+    _make_encoder,
+    FeatureFusionBlock_custom,
+    forward_vit,
+)
 import clip
 import numpy as np
-import pandas as pd
 
-import os
 
 class depthwise_clipseg_conv(nn.Module):
     def __init__(self):
         super(depthwise_clipseg_conv, self).__init__()
         self.depthwise = nn.Conv2d(1, 1, kernel_size=3, padding=1)
-    
+
     def depthwise_clipseg(self, x, channels):
-        x = torch.cat([self.depthwise(x[:, i].unsqueeze(1)) for i in range(channels)], dim=1)
+        x = torch.cat(
+            [self.depthwise(x[:, i].unsqueeze(1)) for i in range(channels)], dim=1
+        )
         return x
 
     def forward(self, x):
@@ -26,10 +27,13 @@ class depthwise_clipseg_conv(nn.Module):
         out = self.depthwise_clipseg(x, channels)
         return out
 
+
 class depthwise_conv(nn.Module):
     def __init__(self, kernel_size=3, stride=1, padding=1):
         super(depthwise_conv, self).__init__()
-        self.depthwise = nn.Conv2d(1, 1, kernel_size=kernel_size, stride=stride, padding=padding)
+        self.depthwise = nn.Conv2d(
+            1, 1, kernel_size=kernel_size, stride=stride, padding=padding
+        )
 
     def forward(self, x):
         # support for 4D tensor with NCHW
@@ -39,16 +43,17 @@ class depthwise_conv(nn.Module):
         x = x.view(-1, C, H, W)
         return x
 
+
 # tanh relu
 class depthwise_block(nn.Module):
-    def __init__(self, kernel_size=3, stride=1, padding=1, activation='relu'):
+    def __init__(self, kernel_size=3, stride=1, padding=1, activation="relu"):
         super(depthwise_block, self).__init__()
         self.depthwise = depthwise_conv(kernel_size=3, stride=1, padding=1)
-        if activation == 'relu':
+        if activation == "relu":
             self.activation = nn.ReLU()
-        elif activation == 'lrelu':
+        elif activation == "lrelu":
             self.activation = nn.LeakyReLU()
-        elif activation == 'tanh':
+        elif activation == "tanh":
             self.activation = nn.Tanh()
 
     def forward(self, x, act=True):
@@ -59,16 +64,15 @@ class depthwise_block(nn.Module):
 
 
 class bottleneck_block(nn.Module):
-    def __init__(self, kernel_size=3, stride=1, padding=1, activation='relu'):
+    def __init__(self, kernel_size=3, stride=1, padding=1, activation="relu"):
         super(bottleneck_block, self).__init__()
         self.depthwise = depthwise_conv(kernel_size=3, stride=1, padding=1)
-        if activation == 'relu':
+        if activation == "relu":
             self.activation = nn.ReLU()
-        elif activation == 'lrelu':
+        elif activation == "lrelu":
             self.activation = nn.LeakyReLU()
-        elif activation == 'tanh':
+        elif activation == "tanh":
             self.activation = nn.Tanh()
-
 
     def forward(self, x, act=True):
         sum_layer = x.max(dim=1, keepdim=True)[0]
@@ -77,6 +81,7 @@ class bottleneck_block(nn.Module):
         if act:
             x = self.activation(x)
         return x
+
 
 class BaseModel(torch.nn.Module):
     def load(self, path):
@@ -150,7 +155,7 @@ class LSeg(BaseModel):
         self.auxlayer = nn.Sequential(
             Interpolate(scale_factor=2, mode="bilinear", align_corners=True),
         )
-        
+
         # cosine similarity as logits
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07)).exp()
 
@@ -168,7 +173,7 @@ class LSeg(BaseModel):
 
         self.texts = []
         # original
-        label = ['others', '']
+        label = ["others", ""]
         for class_i in range(len(self.label_list)):
             label[1] = self.label_list[class_i]
             text = clip.tokenize(label)
@@ -176,7 +181,7 @@ class LSeg(BaseModel):
 
     def forward(self, x, class_info):
         texts = [self.texts[class_i] for class_i in class_info]
-        
+
         if self.channels_last == True:
             x.contiguous(memory_format=torch.channels_last)
 
@@ -193,31 +198,58 @@ class LSeg(BaseModel):
         path_1 = self.scratch.refinenet1(path_2, layer_1_rn)
 
         self.logit_scale = self.logit_scale.to(x.device)
-        text_features = [self.clip_pretrained.encode_text(text.to(x.device)) for text in texts]
+        text_features = [
+            self.clip_pretrained.encode_text(text.to(x.device)) for text in texts
+        ]
 
         image_features = self.scratch.head1(path_1)
 
-
         imshape = image_features.shape
-        image_features = [image_features[i].unsqueeze(0).permute(0,2,3,1).reshape(-1, self.out_c) for i in range(len(image_features))]
+        image_features = [
+            image_features[i].unsqueeze(0).permute(0, 2, 3, 1).reshape(-1, self.out_c)
+            for i in range(len(image_features))
+        ]
 
         # normalized features
-        image_features = [image_feature / image_feature.norm(dim=-1, keepdim=True) for image_feature in image_features]
-        text_features = [text_feature / text_feature.norm(dim=-1, keepdim=True) for text_feature in text_features]
-        
-        logits_per_images = [self.logit_scale * image_feature.half() @ text_feature.t() for image_feature, text_feature in zip(image_features, text_features)]
-        outs = [logits_per_image.float().view(1, imshape[2], imshape[3], -1).permute(0,3,1,2) for logits_per_image in logits_per_images]
+        image_features = [
+            image_feature / image_feature.norm(dim=-1, keepdim=True)
+            for image_feature in image_features
+        ]
+        text_features = [
+            text_feature / text_feature.norm(dim=-1, keepdim=True)
+            for text_feature in text_features
+        ]
+
+        logits_per_images = [
+            self.logit_scale * image_feature.half() @ text_feature.t()
+            for image_feature, text_feature in zip(image_features, text_features)
+        ]
+        outs = [
+            logits_per_image.float()
+            .view(1, imshape[2], imshape[3], -1)
+            .permute(0, 3, 1, 2)
+            for logits_per_image in logits_per_images
+        ]
         out = torch.cat([out for out in outs], dim=0)
 
         out = self.scratch.output_conv(out)
-            
+
         return out
 
 
 class LSegNetZS(LSeg):
     """Network for semantic segmentation."""
-    def __init__(self, label_list, path=None, scale_factor=0.5, aux=False, use_relabeled=False, use_pretrained=True, **kwargs):
 
+    def __init__(
+        self,
+        label_list,
+        path=None,
+        scale_factor=0.5,
+        aux=False,
+        use_relabeled=False,
+        use_pretrained=True,
+        **kwargs,
+    ):
         features = kwargs["features"] if "features" in kwargs else 256
         kwargs["use_bn"] = True
 
@@ -273,7 +305,7 @@ class LSegRN(BaseModel):
         self.auxlayer = nn.Sequential(
             Interpolate(scale_factor=2, mode="bilinear", align_corners=True),
         )
-        
+
         # cosine similarity as logits
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07)).exp()
 
@@ -291,7 +323,7 @@ class LSegRN(BaseModel):
 
         self.texts = []
         # original
-        label = ['others', '']
+        label = ["others", ""]
         for class_i in range(len(self.label_list)):
             label[1] = self.label_list[class_i]
             text = clip.tokenize(label)
@@ -299,7 +331,7 @@ class LSegRN(BaseModel):
 
     def forward(self, x, class_info):
         texts = [self.texts[class_i] for class_i in class_info]
-        
+
         if self.channels_last == True:
             x.contiguous(memory_format=torch.channels_last)
 
@@ -319,30 +351,58 @@ class LSegRN(BaseModel):
         path_1 = self.scratch.refinenet1(path_2, layer_1_rn)
 
         self.logit_scale = self.logit_scale.to(x.device)
-        text_features = [self.clip_pretrained.encode_text(text.to(x.device)) for text in texts]
+        text_features = [
+            self.clip_pretrained.encode_text(text.to(x.device)) for text in texts
+        ]
 
         image_features = self.scratch.head1(path_1)
 
         imshape = image_features.shape
-        image_features = [image_features[i].unsqueeze(0).permute(0,2,3,1).reshape(-1, self.out_c) for i in range(len(image_features))]
+        image_features = [
+            image_features[i].unsqueeze(0).permute(0, 2, 3, 1).reshape(-1, self.out_c)
+            for i in range(len(image_features))
+        ]
 
         # normalized features
-        image_features = [image_feature / image_feature.norm(dim=-1, keepdim=True) for image_feature in image_features]
-        text_features = [text_feature / text_feature.norm(dim=-1, keepdim=True) for text_feature in text_features]
-        
-        logits_per_images = [self.logit_scale * image_feature.half() @ text_feature.t() for image_feature, text_feature in zip(image_features, text_features)]
-        outs = [logits_per_image.float().view(1, imshape[2], imshape[3], -1).permute(0,3,1,2) for logits_per_image in logits_per_images]
+        image_features = [
+            image_feature / image_feature.norm(dim=-1, keepdim=True)
+            for image_feature in image_features
+        ]
+        text_features = [
+            text_feature / text_feature.norm(dim=-1, keepdim=True)
+            for text_feature in text_features
+        ]
+
+        logits_per_images = [
+            self.logit_scale * image_feature.half() @ text_feature.t()
+            for image_feature, text_feature in zip(image_features, text_features)
+        ]
+        outs = [
+            logits_per_image.float()
+            .view(1, imshape[2], imshape[3], -1)
+            .permute(0, 3, 1, 2)
+            for logits_per_image in logits_per_images
+        ]
         out = torch.cat([out for out in outs], dim=0)
 
         out = self.scratch.output_conv(out)
-            
+
         return out
 
 
 class LSegRNNetZS(LSegRN):
     """Network for semantic segmentation."""
-    def __init__(self, label_list, path=None, scale_factor=0.5, aux=False, use_relabeled=False, use_pretrained=True, **kwargs):
 
+    def __init__(
+        self,
+        label_list,
+        path=None,
+        scale_factor=0.5,
+        aux=False,
+        use_relabeled=False,
+        use_pretrained=True,
+        **kwargs,
+    ):
         features = kwargs["features"] if "features" in kwargs else 256
         kwargs["use_bn"] = True
 
@@ -360,4 +420,3 @@ class LSegRNNetZS(LSegRN):
 
         if path is not None:
             self.load(path)
-

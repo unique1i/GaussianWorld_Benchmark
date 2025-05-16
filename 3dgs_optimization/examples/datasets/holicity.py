@@ -1,17 +1,17 @@
-import os
 import json
 import zipfile
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 import torch
 from torch.utils.data import Dataset
 from PIL import Image
 import numpy as np
-from tqdm import tqdm
+
 
 def load_npz_first(path):
     with np.load(path) as d:
         return d[list(d.keys())[0]]
+
 
 class HoliCityDataset(Dataset):
     def __init__(
@@ -72,10 +72,7 @@ class HoliCityDataset(Dataset):
             images_dir = self.scene_path / "image"
             depth_dir = self.scene_path / "depth"
 
-            if not (
-                images_dir.exists()
-                and depth_dir.exists()
-            ):
+            if not (images_dir.exists() and depth_dir.exists()):
                 raise FileNotFoundError(
                     f"Required directories not found in {self.scene_path} for unzipped data."
                 )
@@ -113,12 +110,18 @@ class HoliCityDataset(Dataset):
                 cy = transforms.get("cy", 0.0)
 
             # Construct relative image path
-            image_rel_path = frame["file_path"]  # e.g., "23ec8bbec8eb40478411cba2e55b732e_i0_0.jpg"
+            image_rel_path = frame[
+                "file_path"
+            ]  # e.g., "23ec8bbec8eb40478411cba2e55b732e_i0_0.jpg"
 
             # Construct relative depth path if needed
             depth_path = None
             if self.load_depth:
-                depth_rel_path = image_rel_path.replace("_imag", "_dpth").replace(".jpg", ".npz").replace("image", "depth")
+                depth_rel_path = (
+                    image_rel_path.replace("_imag", "_dpth")
+                    .replace(".jpg", ".npz")
+                    .replace("image", "depth")
+                )
                 depth_path = depth_rel_path
 
             # Get transform matrix

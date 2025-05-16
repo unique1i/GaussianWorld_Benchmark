@@ -3,36 +3,38 @@ import glob
 
 import numpy as np
 import torch
-import matplotlib.pyplot as plt
 from pathlib import Path
 from matplotlib.colors import hsv_to_rgb
-from tqdm import tqdm 
+from tqdm import tqdm
 from segmentation import make_encoder
 
 
-dataset_root = '/usr/bmicnas02/data-biwi-01/qimaqi_data/workspace/iccv_2025/GS_Transformer/data/scannet_full/'
+dataset_root = "/usr/bmicnas02/data-biwi-01/qimaqi_data/workspace/iccv_2025/GS_Transformer/data/scannet_full/"
 
 segment_class_names = np.loadtxt(
     Path(dataset_root) / "metadata" / "semantic_benchmark" / "top100.txt",
     dtype=str,
     delimiter=".",  # dummy delimiter to replace " "
 )
+
+
 def generate_distinct_colors(n=100, seed=42):
     np.random.seed(seed)
-    
+
     # Evenly space hues, randomize saturation and value a bit
     hues = np.linspace(0, 1, n, endpoint=False)
     np.random.shuffle(hues)  # shuffle to prevent similar colors being close in order
     saturations = np.random.uniform(0.6, 0.9, n)
     values = np.random.uniform(0.7, 0.95, n)
-    
+
     hsv_colors = np.stack([hues, saturations, values], axis=1)
     rgb_colors = hsv_to_rgb(hsv_colors)
     return rgb_colors
 
+
 # Example usage
 SCANNET_100_COLORS = generate_distinct_colors(100)
-CLASS_LABELS_100 =  segment_class_names
+CLASS_LABELS_100 = segment_class_names
 
 
 # from metadata.scannet200_constants import CLASS_LABELS_20
@@ -64,11 +66,12 @@ CLASS_LABELS_100 =  segment_class_names
 
 # import open_clip
 
+
 @torch.no_grad()
 def compute_relevancy_scores(
-    lang_feat: torch.Tensor,      # shape: (N, 512)
-    text_feat: torch.Tensor,      # shape: (C, 512)
-    canon_feat: torch.Tensor,     # shape: (K, 512)
+    lang_feat: torch.Tensor,  # shape: (N, 512)
+    text_feat: torch.Tensor,  # shape: (C, 512)
+    canon_feat: torch.Tensor,  # shape: (K, 512)
     device: torch.device,
     use_dot_similarity: bool = False,
 ):
@@ -101,10 +104,10 @@ def compute_relevancy_scores(
         return pred_label.cpu().numpy()
 
     # Original ratio‑based relevancy score
-    dot_lang_text = torch.matmul(lang_feat, text_feat.t())    # (N, C)
+    dot_lang_text = torch.matmul(lang_feat, text_feat.t())  # (N, C)
     dot_lang_canon = torch.matmul(lang_feat, canon_feat.t())  # (N, K)
 
-    exp_lang_text = dot_lang_text.exp()    # (N, C)
+    exp_lang_text = dot_lang_text.exp()  # (N, C)
     exp_lang_canon = dot_lang_canon.exp()  # (N, K)
 
     N, C = dot_lang_text.shape
@@ -117,7 +120,7 @@ def compute_relevancy_scores(
         relevancy_scores.append(score_c)
 
     relevancy_matrix = torch.stack(relevancy_scores, dim=0).t()  # (N, C)
-    pred_label = torch.argmax(relevancy_matrix, dim=1)           # (N,)
+    pred_label = torch.argmax(relevancy_matrix, dim=1)  # (N,)
     return pred_label.cpu().numpy()
 
 
@@ -125,14 +128,13 @@ import clip
 
 
 def main():
-
-    test_feat_name = 'saved_feature'
+    test_feat_name = "saved_feature"
     # text_emb_path = "/usr/bmicnas02/data-biwi-01/qimaqi_data/workspace/iccv_2025/GS_Transformer/data/scannet_full/metadata/semantic_benchmark/clip_text_embeddings_100.pth"
     # text_embeds = torch.load(text_emb_path)  # shape (20, 768)
     # assert text_embeds.shape[-1] == 512
     # text_embeds_np = text_embeds.detach().cpu().numpy()  # shape (100, 768)
 
-    label_path = '/usr/bmicnas02/data-biwi-01/qimaqi_data/workspace/iccv_2025/GS_Transformer/data/scannet_full/metadata/semantic_benchmark/top100.txt'
+    label_path = "/usr/bmicnas02/data-biwi-01/qimaqi_data/workspace/iccv_2025/GS_Transformer/data/scannet_full/metadata/semantic_benchmark/top100.txt"
     # text_emb_path = "/usr/bmicnas02/data-biwi-01/qimaqi_data/workspace/iccv_2025/GS_Transformer/data/scannet_full/metadata/semantic_benchmark/clip_text_embeddings_100.pth"
     # text_embeds = torch.load(text_emb_path)  # shape (20, 768)
     # assert text_embeds.shape[-1] == 512
@@ -142,15 +144,14 @@ def main():
     # model = model.eval().to(device)
     # tokenizer = open_clip.get_tokenizer("ViT-B-16")
     clip_pretrained, _ = make_encoder(
-        'clip_vitl16_384',
+        "clip_vitl16_384",
         features=256,
         groups=1,
         expand=False,
         exportable=False,
         hooks=[5, 11, 17, 23],
         use_readout="project",
-        )
-    
+    )
 
     # Canonical phrases stay fixed
     canonical_phrases = ["object", "things", "stuff", "texture"]
@@ -160,12 +161,14 @@ def main():
         # canon_feat /= canon_feat.norm(dim=-1, keepdim=True)
         # canon_feat = canon_feat.cpu()
         canon = clip.tokenize(canonical_phrases)
-        canon = canon.cuda() # canon = canon.to(x.device) # TODO: need use correct device
-        canon_feat = clip_pretrained.encode_text(canon) # torch.Size([4, 512])
+        canon = (
+            canon.cuda()
+        )  # canon = canon.to(x.device) # TODO: need use correct device
+        canon_feat = clip_pretrained.encode_text(canon)  # torch.Size([4, 512])
         canon_feat /= canon_feat.norm(dim=-1, keepdim=True)
         canon_feat = canon_feat.cpu()  # shape: (4, 512)
     # ------------------------------
-    # 3) Evaluate 
+    # 3) Evaluate
     # ------------------------------
 
     ignore_classes = ["wall", "floor", "ceiling"]  # for foreground metrics
@@ -175,15 +178,14 @@ def main():
         label_names = [line.strip() for line in f if len(line.strip()) > 0]
     prompt_list = ["this is a " + name for name in label_names]
 
-    
     with torch.no_grad():
         # text_tokens = tokenizer(prompt_list)
         # text_feat = model.encode_text(text_tokens.to(device))  # (C, 512)
         # text_feat /= text_feat.norm(dim=-1, keepdim=True)
         # text_feat = text_feat.cpu()
         text = clip.tokenize(label_names)
-        text = text.cuda() # text = text.to(x.device) # TODO: need use correct device
-        text_feat = clip_pretrained.encode_text(text) # torch.Size([150, 512])
+        text = text.cuda()  # text = text.to(x.device) # TODO: need use correct device
+        text_feat = clip_pretrained.encode_text(text)  # torch.Size([150, 512])
         text_feat /= text_feat.norm(dim=-1, keepdim=True)
         text_feat = text_feat.cpu()  # shape: (150, 512)
 
@@ -194,24 +196,30 @@ def main():
     num_classes = len(label_names)
     confusion_mat = np.zeros((num_classes, num_classes), dtype=np.int64)
 
-
-    for scene_name in os.listdir('/usr/bmicnas02/data-biwi-01/qimaqi_data/workspace/neurips_2025/feature-3dgs_Qi/output/scannetpp/')[:2]:
-        for split in ['train', 'test']:
-            print("Processing scene: ", scene_name, ' split: ', split)
+    for scene_name in os.listdir(
+        "/usr/bmicnas02/data-biwi-01/qimaqi_data/workspace/neurips_2025/feature-3dgs_Qi/output/scannetpp/"
+    )[:2]:
+        for split in ["train", "test"]:
+            print("Processing scene: ", scene_name, " split: ", split)
             # scene_name = '09c1414f1b'
             # split = 'train'
             scene_folder = f"/usr/bmicnas02/data-biwi-01/qimaqi_data/workspace/iccv_2025/GS_Transformer/data/scannet_full/subset_sequences/{scene_name}/dslr"
-            
-            feature_3dgs_path = f'/usr/bmicnas02/data-biwi-01/qimaqi_data/workspace/neurips_2025/feature-3dgs_Qi/output/scannetpp/{scene_name}'
+
+            feature_3dgs_path = f"/usr/bmicnas02/data-biwi-01/qimaqi_data/workspace/neurips_2025/feature-3dgs_Qi/output/scannetpp/{scene_name}"
             if not os.path.exists(feature_3dgs_path):
                 print(f"feature_3dgs_path not exists: {feature_3dgs_path}")
                 continue
 
-
             out_folder = os.path.join(scene_folder, "zero_shot_semseg")
             os.makedirs(out_folder, exist_ok=True)
 
-            feat_files = sorted(glob.glob(os.path.join(feature_3dgs_path, split, 'ours_7000', test_feat_name, "*.pt")))
+            feat_files = sorted(
+                glob.glob(
+                    os.path.join(
+                        feature_3dgs_path, split, "ours_7000", test_feat_name, "*.pt"
+                    )
+                )
+            )
             # print("feat_files: ", feat_files, os.path.join(feature_3dgs_path, split, 'ours_7000', test_feat_name))
 
             mean_iou_list = []
@@ -220,14 +228,21 @@ def main():
             fg_macc_list = []
             global_acc_list = []
 
-            print("feat_files: ", len(feat_files), 'in', os.path.join(feature_3dgs_path, split, 'ours_7000', test_feat_name))
-            assert len(feat_files) > 0, f"No feature files found in {os.path.join(feature_3dgs_path, split, 'ours_7000', test_feat_name)}"
+            print(
+                "feat_files: ",
+                len(feat_files),
+                "in",
+                os.path.join(feature_3dgs_path, split, "ours_7000", test_feat_name),
+            )
+            assert (
+                len(feat_files) > 0
+            ), f"No feature files found in {os.path.join(feature_3dgs_path, split, 'ours_7000', test_feat_name)}"
 
             for feat_path in tqdm(feat_files):
                 # Derive the matching feature path
                 base_name = os.path.basename(feat_path).replace("_fmap_CxHxW.pt", "")
 
-                feat = torch.load(feat_path).to(device) # shape (N_segments, 768)
+                feat = torch.load(feat_path).to(device)  # shape (N_segments, 768)
                 # print("feat shape: ", feat.shape)
 
                 # Dot product: text embeddings x segment features
@@ -244,7 +259,9 @@ def main():
                 feat = feat.to(text_feat.dtype)  # Ensure same dtype as text_feat
                 C, H, W = feat.shape
 
-                feat_flatten = feat.permute(1, 2, 0).reshape(-1, C)  # shape: (N_segments, 768)
+                feat_flatten = feat.permute(1, 2, 0).reshape(
+                    -1, C
+                )  # shape: (N_segments, 768)
                 pred_labels = compute_relevancy_scores(
                     feat_flatten,  # shape: (N_segments, 512)
                     text_feat,
@@ -253,17 +270,17 @@ def main():
                     use_dot_similarity=True,
                 )
 
-                
                 pred_labels = pred_labels.reshape(H, W)  # shape: (H, W)
                 pred_class_map = pred_labels.astype(np.int64)  # shape: (H, W)
                 # print("pred_class_map shape: ", pred_class_map.shape, pred_class_map.min(), pred_class_map.max())
 
                 # saving labels
-                label_save_path = feat_path.replace("_fmap_CxHxW.pt", "_pred_labels.npy").replace(test_feat_name, "pred_labels")
+                label_save_path = feat_path.replace(
+                    "_fmap_CxHxW.pt", "_pred_labels.npy"
+                ).replace(test_feat_name, "pred_labels")
                 os.makedirs(os.path.dirname(label_save_path), exist_ok=True)
                 # print("save pred_labels to: ", label_save_path)
                 np.save(label_save_path, pred_labels)
-
 
                 # unique_seg_ids = np.unique(seg)
                 # for s_id in unique_seg_ids:
@@ -272,7 +289,7 @@ def main():
                 #         continue
                 #     if s_id >= len(pred_labels):
                 #         # Safety check if th
-                # 
+                #
                 # ere's any mismatch
                 #         print(f"Warning: segment ID {s_id} out of range for features.")
                 #         continue
@@ -282,16 +299,21 @@ def main():
                 #     pred_class_map[seg == s_id] = class_idx
 
                 # print("pred_class_map shape: ", pred_class_map.shape, pred_class_map.min(), pred_class_map.max())
-                gt_2d_seg = np.load(os.path.join(scene_folder, 'segmentation_2d', base_name + ".npy"))
+                gt_2d_seg = np.load(
+                    os.path.join(scene_folder, "segmentation_2d", base_name + ".npy")
+                )
                 # interpolate to shape (H, W)
                 gt_2d_seg = gt_2d_seg.astype(np.float32)  # shape: (H, W)
-                gt_2d_seg = torch.nn.functional.interpolate(
-                    torch.from_numpy(gt_2d_seg).unsqueeze(0).unsqueeze(0),
-                    size=(H, W),
-                    mode='nearest'
-                ).squeeze().numpy()
-                gt_2d_seg = gt_2d_seg.astype(np.int64)  # shape: (H, W) 
-
+                gt_2d_seg = (
+                    torch.nn.functional.interpolate(
+                        torch.from_numpy(gt_2d_seg).unsqueeze(0).unsqueeze(0),
+                        size=(H, W),
+                        mode="nearest",
+                    )
+                    .squeeze()
+                    .numpy()
+                )
+                gt_2d_seg = gt_2d_seg.astype(np.int64)  # shape: (H, W)
 
                 for height_i in range(H):
                     for width_i in range(W):
@@ -321,7 +343,9 @@ def main():
 
     valid_mask = gt_class_counts > 0
     mean_iou = np.mean(np.array(ious)[valid_mask]) if valid_mask.any() else 0.0
-    mean_class_acc = np.mean(np.array(per_class_acc)[valid_mask]) if valid_mask.any() else 0.0
+    mean_class_acc = (
+        np.mean(np.array(per_class_acc)[valid_mask]) if valid_mask.any() else 0.0
+    )
 
     total_correct = np.trace(confusion_mat)
     total_count = confusion_mat.sum()

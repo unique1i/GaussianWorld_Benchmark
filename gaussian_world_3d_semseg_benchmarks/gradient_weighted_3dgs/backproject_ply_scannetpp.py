@@ -1,10 +1,9 @@
-import math
 import os
 import time
 from typing import Literal
 import torch
-import tyro
 from gsplat import rasterization
+
 # import pycolmap_scene_manager as pycolmap
 import numpy as np
 import matplotlib
@@ -13,20 +12,18 @@ matplotlib.use("TkAgg")  # To avoid conflict with cv2
 from tqdm import tqdm
 from lseg import LSegNet
 import json
-from pathlib import Path
 
 from utils import (
     load_ply,
-    load_checkpoint,
     get_viewmat_from_colmap_image,
-    prune_by_gradients,
     prune_by_gradients_json,
-    test_proper_pruning,
     test_proper_pruning_json,
 )
 
 
-def create_feature_field_lseg(splats, batch_size=1, use_cpu=False, inverse_extrinsics=True, resize=[240, 320]):
+def create_feature_field_lseg(
+    splats, batch_size=1, use_cpu=False, inverse_extrinsics=True, resize=[240, 320]
+):
     device = "cpu" if use_cpu else "cuda"
 
     net = LSegNet(
@@ -81,7 +78,7 @@ def create_feature_field_lseg(splats, batch_size=1, use_cpu=False, inverse_extri
         focal_len_x = contents["fl_x"] if "fl_x" in contents else contents["fx"]
         focal_len_y = contents["fl_y"] if "fl_y" in contents else contents["fy"]
 
-        cx = contents["cx"] 
+        cx = contents["cx"]
         cy = contents["cy"]
         if "crop_edge" in contents:
             cx -= contents["crop_edge"]
@@ -93,32 +90,41 @@ def create_feature_field_lseg(splats, batch_size=1, use_cpu=False, inverse_extri
             # scannet case, fx, fy, cx, cy in scannet json are already for image size 640x480
             width, height = contents["resize"]
             if "crop_edge" in contents:
-                width -= 2*contents["crop_edge"]
-                height -= 2*contents["crop_edge"]
+                width -= 2 * contents["crop_edge"]
+                height -= 2 * contents["crop_edge"]
         else:
             # if not specify, we assume the weight and height are twice the cx and cy
-            width, height = cx * 2, cy * 2 
+            width, height = cx * 2, cy * 2
         frames = contents["frames"]
-        for idx, frame in tqdm(enumerate(frames), desc="Feature backprojection (frames)", total=len(frames)):
+        for idx, frame in tqdm(
+            enumerate(frames), desc="Feature backprojection (frames)", total=len(frames)
+        ):
             # NeRF 'transform_matrix' is a camera-to-world transform
             c2w = np.array(frame["transform_matrix"])
             # change from OpenGL/Blender camera axes (Y up, Z back) to COLMAP (Y down, Z forward)
-            applied_transform = np.array([
-                [0,  1,  0,  0],
-                [1,  0,  0,  0],
-                [0,  0, -1,  0],
-                [0,  0,  0,  1],
-            ], dtype=float)
+            applied_transform = np.array(
+                [
+                    [0, 1, 0, 0],
+                    [1, 0, 0, 0],
+                    [0, 0, -1, 0],
+                    [0, 0, 0, 1],
+                ],
+                dtype=float,
+            )
             c2w = np.dot(applied_transform, c2w)
             # get the world-to-camera transform and set R, T
             # w2c = c2w
-            if inverse_extrinsics: # some dataset save world-to-camera, some camera-to-world, careful!
+            if (
+                inverse_extrinsics
+            ):  # some dataset save world-to-camera, some camera-to-world, careful!
                 w2c = np.linalg.inv(c2w)
             else:
                 w2c = c2w
 
             w2c[1:3] *= -1
-            R = w2c[:3,:3] #np.transpose(w2c[:3,:3])  # R is stored transposed due to 'glm' in CUDA code
+            R = w2c[
+                :3, :3
+            ]  # np.transpose(w2c[:3,:3])  # R is stored transposed due to 'glm' in CUDA code
             T = w2c[:3, 3]
             # image_path = os.path.join(image_path, f'{cam_name + extension}')
             # image_name = Path(cam_name).stem
@@ -127,11 +133,11 @@ def create_feature_field_lseg(splats, batch_size=1, use_cpu=False, inverse_extri
             viewmat[:3, 3] = torch.tensor(T).float()  # .to(device)
             resize_ratio = resize[1] / 1752
             fx_resize = focal_len_x * resize_ratio
-            
+
             fy_resize = focal_len_y * resize_ratio
             cx_resize = cx * resize_ratio
             cy_resize = cy * resize_ratio
-            
+
             K = torch.tensor(
                 [
                     [fx_resize, 0, cx_resize],
@@ -140,19 +146,18 @@ def create_feature_field_lseg(splats, batch_size=1, use_cpu=False, inverse_extri
                 ]
             ).float()
 
-    # images = sorted(colmap_project.images.values(), key=lambda x: x.name)
-    # batch_size = math.ceil(len(images) / batch_count) if batch_count > 0 else 1
+            # images = sorted(colmap_project.images.values(), key=lambda x: x.name)
+            # batch_size = math.ceil(len(images) / batch_count) if batch_count > 0 else 1
 
-    # for batch_start in tqdm(
-    #     range(0, len(images), batch_size),
-    #     desc="Feature backprojection (batches)",
-    # ):
-    #     batch = images[batch_start : batch_start + batch_size]
-    #     for image in batch:
-    #         viewmat = get_viewmat_from_colmap_image(image)
+            # for batch_start in tqdm(
+            #     range(0, len(images), batch_size),
+            #     desc="Feature backprojection (batches)",
+            # ):
+            #     batch = images[batch_start : batch_start + batch_size]
+            #     for image in batch:
+            #         viewmat = get_viewmat_from_colmap_image(image)
             width = int(K[0, 2] * 2)
             height = int(K[1, 2] * 2)
-            
 
             with torch.no_grad():
                 output, _, meta = rasterization(
@@ -281,7 +286,6 @@ def create_feature_field_dino(splats):
 
     print("Distilling features...")
     for image in tqdm(sorted(colmap_project.images.values(), key=lambda x: x.name)):
-
         image_name = image.name  # .split(".")[0] + ".jpg"
 
         viewmat = get_viewmat_from_colmap_image(image)
@@ -368,19 +372,16 @@ def create_feature_field_dino(splats):
 
 
 def main(
-    data_root_path: str = "/scannetpp_mini_val_set_suite/original_data", # subset
+    data_root_path: str = "/scannetpp_mini_val_set_suite/original_data",  # subset
     ply_root_path: str = "/scannetpp_mini_val_set_suite/mcmc_3dgs/",  # checkpoint path, can generate from original 3DGS repo
     results_root_dir: str = "./results/scannetpp/",  # output path
-    rasterizer: Literal[
-        "inria", "gsplat"
-    ] = "gsplat",  
+    rasterizer: Literal["inria", "gsplat"] = "gsplat",
     feature_field_batch_count: int = 1,  # Number of batches to process for feature field
     run_feature_field_on_cpu: bool = False,  # Run feature field on CPU
     feature: Literal["lseg", "dino"] = "lseg",  # Feature field type
     scene_i: str = "09c1414f1b",  # Scene index for processing
     rescale: int = 0,  # Rescale factor for images
 ):
-
     print("Processing scene:", scene_i)
     result_i_dir = os.path.join(results_root_dir, scene_i)
 
@@ -390,11 +391,9 @@ def main(
     torch.set_default_device("cuda")
 
     os.makedirs(result_i_dir, exist_ok=True)
-    ply_path_i = os.path.join(ply_root_path, scene_i, 'ckpts', 'point_cloud_30000.ply')
+    ply_path_i = os.path.join(ply_root_path, scene_i, "ckpts", "point_cloud_30000.ply")
     data_dir = os.path.join(data_root_path, scene_i)
-    splats = load_ply(
-        ply_path_i, data_dir, rasterizer=rasterizer, dataset="scannetpp"
-    )
+    splats = load_ply(ply_path_i, data_dir, rasterizer=rasterizer, dataset="scannetpp")
     splats_optimized = prune_by_gradients_json(splats)
 
     test_proper_pruning_json(splats, splats_optimized)
@@ -405,7 +404,10 @@ def main(
             features_save_dir = os.path.join(result_i_dir, "features_lseg_584_876.pt")
             if not os.path.exists(features_save_dir):
                 features = create_feature_field_lseg(
-                    splats, feature_field_batch_count, run_feature_field_on_cpu,resize=[584, 876]
+                    splats,
+                    feature_field_batch_count,
+                    run_feature_field_on_cpu,
+                    resize=[584, 876],
                 )
                 torch.save(features, features_save_dir)
             else:
@@ -421,12 +423,14 @@ def main(
                 xyz = np.load(xyz_save_dir)
                 print("XYZ file already exists, skipping XYZ extraction.")
 
-
         if rescale == 1:
             features_save_dir = os.path.join(result_i_dir, "features_lseg_480_640.pt")
             if not os.path.exists(features_save_dir):
                 features = create_feature_field_lseg(
-                    splats, feature_field_batch_count, run_feature_field_on_cpu,resize=[480, 640]
+                    splats,
+                    feature_field_batch_count,
+                    run_feature_field_on_cpu,
+                    resize=[480, 640],
                 )
                 torch.save(features, features_save_dir)
             xyz_save_dir = os.path.join(result_i_dir, "xyz_lseg_480_640.npy")
@@ -435,10 +439,12 @@ def main(
                 xyz = xyz.reshape(-1, 3)
                 np.save(xyz_save_dir, xyz)
 
-
         if rescale == 2:
             features = create_feature_field_lseg(
-                splats, feature_field_batch_count, run_feature_field_on_cpu,resize=[240, 320]
+                splats,
+                feature_field_batch_count,
+                run_feature_field_on_cpu,
+                resize=[240, 320],
             )
             torch.save(features, f"{result_i_dir}/features_lseg_240_320.pt")
 
@@ -451,6 +457,7 @@ def main(
 
 
 import argparse
+
 
 def get_arguments():
     argparser = argparse.ArgumentParser(description="Feature Field Extraction")
@@ -486,7 +493,6 @@ def get_arguments():
     )
 
     return argparser.parse_args()
-
 
 
 if __name__ == "__main__":

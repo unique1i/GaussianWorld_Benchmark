@@ -26,64 +26,82 @@ For multilabeled vertices, all labels in the ground truth must be present in the
 # 1. Basic I/O Utilities
 ###################################
 
+
 def load_scene_list(gt_scene_dir):
     # Check if the directory exists
     if not os.path.isdir(gt_scene_dir):
         raise ValueError(f"Directory {gt_scene_dir} does not exist")
-    
+
     # Get all entries in the directory
     all_entries = os.listdir(gt_scene_dir)
-    
-    folder_names = [entry.replace(".cache", "") for entry in all_entries 
-                   if os.path.isdir(os.path.join(gt_scene_dir, entry))]
-    
+
+    folder_names = [
+        entry.replace(".cache", "")
+        for entry in all_entries
+        if os.path.isdir(os.path.join(gt_scene_dir, entry))
+    ]
+
     return folder_names
 
+
 def load_ply(path):
-    semantic_dim=10
-    
+    semantic_dim = 10
+
     plydata = PlyData.read(path)
 
-    xyz = np.stack((np.asarray(plydata.elements[0]["x"]),
-                    np.asarray(plydata.elements[0]["y"]),
-                    np.asarray(plydata.elements[0]["z"])),  axis=1)
+    xyz = np.stack(
+        (
+            np.asarray(plydata.elements[0]["x"]),
+            np.asarray(plydata.elements[0]["y"]),
+            np.asarray(plydata.elements[0]["z"]),
+        ),
+        axis=1,
+    )
 
-
-    sem_names = [p.name for p in plydata.elements[0].properties if p.name.startswith("sem_")]
-    sem_names = sorted(sem_names, key=lambda x: int(x.split('_')[-1]))
+    sem_names = [
+        p.name for p in plydata.elements[0].properties if p.name.startswith("sem_")
+    ]
+    sem_names = sorted(sem_names, key=lambda x: int(x.split("_")[-1]))
     sems = np.zeros((xyz.shape[0], len(sem_names) or semantic_dim))
     if len(sem_names) == semantic_dim:
         for idx, attr_name in enumerate(sem_names):
             sems[:, idx] = np.asarray(plydata.elements[0][attr_name])
-    
+
     return xyz, sems
+
 
 def save_results_to_file(log_path, results_str, args):
     """Save the results to a text file with relevant parameters in the filename."""
     # Create logs directory if it doesn't exist
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
-    
+
     # Write results to the file
-    with open(log_path, 'w') as f:
+    with open(log_path, "w") as f:
         # Write command line arguments first
         f.write("Command line arguments:\n")
         for arg, value in vars(args).items():
             f.write(f"{arg}: {value}\n")
         f.write("\n")
-        
+
         # Write experiment results
         f.write(results_str)
-    
+
     print(f"\nResults saved to: {log_path}")
+
 
 ###################################
 # 2. SigLIP Relevancy Scoring
 ###################################
 
+
 @torch.no_grad()
-def compute_relevancy_scores(lang_feat: torch.Tensor, text_feat: torch.Tensor,
-                             canon_feat: torch.Tensor, device: torch.device,
-                             use_siglip_probabilities: bool = True):
+def compute_relevancy_scores(
+    lang_feat: torch.Tensor,
+    text_feat: torch.Tensor,
+    canon_feat: torch.Tensor,
+    device: torch.device,
+    use_siglip_probabilities: bool = True,
+):
     lang_feat = lang_feat.to(device, non_blocking=True)
     text_feat = text_feat.to(device, non_blocking=True)
 
@@ -96,7 +114,7 @@ def compute_relevancy_scores(lang_feat: torch.Tensor, text_feat: torch.Tensor,
             top1_indices[~mask] = IGNORE_INDEX
         else:
             probs = torch.softmax(logits, dim=1)  # (N, C) for other models
-            top1_indices = torch.argmax(probs, dim=1, keepdim=True) 
+            top1_indices = torch.argmax(probs, dim=1, keepdim=True)
         return top1_indices.cpu().numpy()  # shape (N, 1)
     else:
         canon_feat = canon_feat.to(device, non_blocking=True)
@@ -113,22 +131,57 @@ def compute_relevancy_scores(lang_feat: torch.Tensor, text_feat: torch.Tensor,
         _, top1_indices = torch.topk(relevancy_matrix, k=1, dim=1)
         return top1_indices.cpu().numpy()
 
+
 ###################################
 # 3. Main Evaluation Script
 ###################################
 
-model_name = "clip" # override with the model name
+model_name = "clip"  # override with the model name
+
+
 def main():
     argparser = argparse.ArgumentParser()
-    argparser.add_argument("--scannetpp_preprocessed_root", type=str, default="/scratch/joanna_cheng/scannetpp_v2_preprocessed")
-    argparser.add_argument("--pred_scene_dir", type=str, default="/scratch/joanna_cheng/scannetpp_pred")
-    argparser.add_argument("--gs_root", type=str, default="/scratch/joanna_cheng/scannetpp_pred")
-    argparser.add_argument("--nn_num", type=int, help="Number of nearest neighbors to consider for semseg voting.")
-    argparser.add_argument("--print_class_iou", action="store_true", help="If true, print Top-1 IoU for each class.")
-    argparser.add_argument("--ignore_index", type=int, default=-1, help="Index to ignore in the confusion")
-    argparser.add_argument("--ignore_classes", nargs='+', default=["wall", "floor", "ceiling"], help="Comma-separated list of classes to ignore in the evaluation.")
-    argparser.add_argument("--model_spec", type=str, default="siglip2-base-patch16-512", help="SigLIP model specification.")
-    argparser.add_argument("--eval_top3", action="store_true", help="Enable Top-3 evaluation. If not set, only Top-1 evaluation is performed.")
+    argparser.add_argument(
+        "--scannetpp_preprocessed_root",
+        type=str,
+        default="/scratch/joanna_cheng/scannetpp_v2_preprocessed",
+    )
+    argparser.add_argument(
+        "--pred_scene_dir", type=str, default="/scratch/joanna_cheng/scannetpp_pred"
+    )
+    argparser.add_argument(
+        "--gs_root", type=str, default="/scratch/joanna_cheng/scannetpp_pred"
+    )
+    argparser.add_argument(
+        "--nn_num",
+        type=int,
+        help="Number of nearest neighbors to consider for semseg voting.",
+    )
+    argparser.add_argument(
+        "--print_class_iou",
+        action="store_true",
+        help="If true, print Top-1 IoU for each class.",
+    )
+    argparser.add_argument(
+        "--ignore_index", type=int, default=-1, help="Index to ignore in the confusion"
+    )
+    argparser.add_argument(
+        "--ignore_classes",
+        nargs="+",
+        default=["wall", "floor", "ceiling"],
+        help="Comma-separated list of classes to ignore in the evaluation.",
+    )
+    argparser.add_argument(
+        "--model_spec",
+        type=str,
+        default="siglip2-base-patch16-512",
+        help="SigLIP model specification.",
+    )
+    argparser.add_argument(
+        "--eval_top3",
+        action="store_true",
+        help="Enable Top-3 evaluation. If not set, only Top-1 evaluation is performed.",
+    )
     args = argparser.parse_args()
     eval_top3 = args.eval_top3
     args.print_class_iou = True
@@ -140,7 +193,9 @@ def main():
     global model_name
     version = "scannetpp_v2"
     scannetpp_preprocessed_root = args.scannetpp_preprocessed_root
-    text_path = f"/scratch/joanna_cheng/scannetpp_v1_val_subset/scannetpp_semseg_top100.txt"
+    text_path = (
+        "/scratch/joanna_cheng/scannetpp_v1_val_subset/scannetpp_semseg_top100.txt"
+    )
 
     EXCLUDED_CLASS_NAMES = args.ignore_classes
     NN_NUM = args.nn_num if args.nn_num else 25
@@ -149,22 +204,26 @@ def main():
     use_siglip_probabilities = True if not model_name == "clip" else False
 
     # used for logging
-    model_name = "clip" # override with the model name
+    model_name = "clip"  # override with the model name
     # split_name = val_split_path.split("/")[-1].split(".")[0]
     method_name = "GOI"
     gs_folder_name = os.path.basename(os.path.normpath(args.pred_scene_dir))
-    log_path = f"logs/{method_name}_{gs_folder_name}_nn_num_{NN_NUM}_val_{model_name}.txt"
+    log_path = (
+        f"logs/{method_name}_{gs_folder_name}_nn_num_{NN_NUM}_val_{model_name}.txt"
+    )
 
     # Capture all printed output
     stdout_original = sys.stdout
     results_capture = []
+
     class CaptureOutput:
         def write(self, text):
             results_capture.append(text)
             stdout_original.write(text)
+
         def flush(self):
             stdout_original.flush()
-    
+
     sys.stdout = CaptureOutput()
 
     # Load validation scenes
@@ -174,19 +233,18 @@ def main():
     print(f"Found {len(scene_ids)} validation scenes.")
 
     # Load SigLIP model & text embeddings
-    # siglip_spec = args.model_spec 
+    # siglip_spec = args.model_spec
     if model_name == "clip":
-        CLIP_MODEL = "ViT-B-16"                         
-        CLIP_PRETRAIN = "laion2b_s34b_b88k"             
+        CLIP_MODEL = "ViT-B-16"
+        CLIP_PRETRAIN = "laion2b_s34b_b88k"
         model, _, _ = open_clip.create_model_and_transforms(
             CLIP_MODEL, pretrained=CLIP_PRETRAIN
         )
         model = model.eval().to(device)
         tokenizer = open_clip.get_tokenizer(CLIP_MODEL)
     elif model_name == "siglip2":
-        siglip_spec = "siglip2-base-patch16-512"        
-        model = AutoModel.from_pretrained(f"google/{siglip_spec}")\
-                        .eval().to(device)
+        siglip_spec = "siglip2-base-patch16-512"
+        model = AutoModel.from_pretrained(f"google/{siglip_spec}").eval().to(device)
         tokenizer = AutoTokenizer.from_pretrained(f"google/{siglip_spec}")
     else:
         raise ValueError(f"Unsupported model name: {model_name}")
@@ -194,6 +252,7 @@ def main():
     with open(text_path, "r") as f:
         lines = f.readlines()
     top100_label = [line.strip() for line in lines]
+
     def prepare_text_features(text_prompts):
         text_prompts = ["this is a " + name for name in text_prompts]
         if model_name == "clip":
@@ -203,8 +262,9 @@ def main():
             text_feat /= text_feat.norm(dim=-1, keepdim=True)
             text_feat = text_feat.cpu()
         elif model_name == "siglip2":
-            inputs = tokenizer(text_prompts, padding="max_length",
-                               max_length=64, return_tensors="pt")
+            inputs = tokenizer(
+                text_prompts, padding="max_length", max_length=64, return_tensors="pt"
+            )
             inputs = {k: v.to(device) for k, v in inputs.items()}
             with torch.no_grad():
                 text_feat = model.get_text_features(**inputs)
@@ -213,7 +273,7 @@ def main():
         else:
             raise ValueError(f"Unsupported model name: {model_name}")
         return text_feat
-    
+
     text_feat = prepare_text_features(top100_label)  # (C, 512)
 
     canon_feat = None
@@ -225,7 +285,12 @@ def main():
         canon_feat = canon_feat.cpu()
     else:
         with torch.no_grad():
-            canon_inputs = tokenizer(canonical_phrases, padding="max_length", max_length=64, return_tensors="pt")
+            canon_inputs = tokenizer(
+                canonical_phrases,
+                padding="max_length",
+                max_length=64,
+                return_tensors="pt",
+            )
             canon_inputs = {k: v.to(device) for k, v in canon_inputs.items()}
             canon_feat = model.get_text_features(**canon_inputs)
             canon_feat /= canon_feat.norm(dim=-1, keepdim=True)
@@ -252,7 +317,9 @@ def main():
 
     # Loop over scenes
     for scene_id in tqdm(scene_ids, desc="Scene", dynamic_ncols=True):
-        scene_preproc_folder = os.path.join(scannetpp_preprocessed_root, "val", scene_id)
+        scene_preproc_folder = os.path.join(
+            scannetpp_preprocessed_root, "val", scene_id
+        )
         # if not os.path.isdir(scene_preproc_folder):
         #     scene_preproc_folder = os.path.join(scannetpp_preprocessed_root, "train", scene_id)
         # if not os.path.isdir(scene_preproc_folder):
@@ -273,32 +340,44 @@ def main():
         # Load 3DGS and language features
         scene_3dgs_folder = os.path.join(args.gs_root, scene_id)
         print(scene_3dgs_folder)
-        ply_path = os.path.join(scene_3dgs_folder, "point_cloud/iteration_1500_lvl_3", "point_cloud.ply")
+        ply_path = os.path.join(
+            scene_3dgs_folder, "point_cloud/iteration_1500_lvl_3", "point_cloud.ply"
+        )
         if not os.path.isfile(ply_path):
             print(f"[Warning] 3DGS .ply not found for scene {scene_id}")
             continue
-        
+
         gauss_xyz, gauss_lang_feat = load_ply(ply_path)
-        gauss_lang_feat = torch.from_numpy(gauss_lang_feat).float().to(device) # (G, 10)
-        
-        lut_model_path = os.path.join(scene_3dgs_folder, "point_cloud/iteration_1500_lvl_3", "LUT.pt")
+        gauss_lang_feat = (
+            torch.from_numpy(gauss_lang_feat).float().to(device)
+        )  # (G, 10)
+
+        lut_model_path = os.path.join(
+            scene_3dgs_folder, "point_cloud/iteration_1500_lvl_3", "LUT.pt"
+        )
         LUT = torch.load(lut_model_path).to(device)
-        
-        mlp_model_path = os.path.join(scene_3dgs_folder, "point_cloud/iteration_1500_lvl_3", "semantic_MLP.pt")
+
+        mlp_model_path = os.path.join(
+            scene_3dgs_folder, "point_cloud/iteration_1500_lvl_3", "semantic_MLP.pt"
+        )
         MLP = SemanticModel.load(mlp_model_path).to(device)
-        
+
         with torch.no_grad():
-            gauss_lang_label = MLP(gauss_lang_feat) # (G, 500)
-            sem_logit = softmax(gauss_lang_label*10, dim=-1).argmax(dim=-1) # (G, 500)
-            gauss_lang_feat = LUT[sem_logit] # (G, 512)
-            
+            gauss_lang_label = MLP(gauss_lang_feat)  # (G, 500)
+            sem_logit = softmax(gauss_lang_label * 10, dim=-1).argmax(
+                dim=-1
+            )  # (G, 500)
+            gauss_lang_feat = LUT[sem_logit]  # (G, 512)
+
             norms = gauss_lang_feat.norm(dim=1)
-            gauss_lang_feat = gauss_lang_feat / gauss_lang_feat.norm(dim=-1, keepdim=True)
-        
+            gauss_lang_feat = gauss_lang_feat / gauss_lang_feat.norm(
+                dim=-1, keepdim=True
+            )
+
             keep_mask = norms > 0
             gauss_xyz = gauss_xyz[keep_mask.cpu().numpy()]
             gauss_lang_feat = gauss_lang_feat[keep_mask]
-        
+
         del gauss_lang_label, sem_logit
         del LUT, MLP
         del keep_mask
@@ -418,20 +497,42 @@ def main():
             per_class_iou.append(iou)
             gt_count = tp + fn
             per_class_acc.append(tp / gt_count if gt_count > 0 else 0.0)
-        global_acc = np.sum(np.diag(confmat)) / total_points_cm if total_points_cm > 0 else 0.0
-        present_classes = [c for c in range(num_classes) if (np.sum(confmat[c, :]) + fn_ignore[c]) > 0]
-        mean_class_acc = np.mean([per_class_acc[c] for c in present_classes]) if present_classes else 0.0
-        mIoU = np.mean([per_class_iou[c] for c in present_classes]) if present_classes else 0.0
-        freq_weighted_iou = sum(((np.sum(confmat[c, :]) + fn_ignore[c]) / total_points_cm) * per_class_iou[c] for c in range(num_classes))
+        global_acc = (
+            np.sum(np.diag(confmat)) / total_points_cm if total_points_cm > 0 else 0.0
+        )
+        present_classes = [
+            c for c in range(num_classes) if (np.sum(confmat[c, :]) + fn_ignore[c]) > 0
+        ]
+        mean_class_acc = (
+            np.mean([per_class_acc[c] for c in present_classes])
+            if present_classes
+            else 0.0
+        )
+        mIoU = (
+            np.mean([per_class_iou[c] for c in present_classes])
+            if present_classes
+            else 0.0
+        )
+        freq_weighted_iou = sum(
+            ((np.sum(confmat[c, :]) + fn_ignore[c]) / total_points_cm)
+            * per_class_iou[c]
+            for c in range(num_classes)
+        )
         return global_acc, mean_class_acc, mIoU, freq_weighted_iou
 
-    gacc1, macc1, miou1, fiou1 = compute_confmat_metrics(confusion_mat_top1, fn_ignore_top1)
+    gacc1, macc1, miou1, fiou1 = compute_confmat_metrics(
+        confusion_mat_top1, fn_ignore_top1
+    )
     if eval_top3:
-        gacc3, macc3, miou3, fiou3 = compute_confmat_metrics(confusion_mat_top3, fn_ignore_top3)
+        gacc3, macc3, miou3, fiou3 = compute_confmat_metrics(
+            confusion_mat_top3, fn_ignore_top3
+        )
     else:
         gacc3 = macc3 = miou3 = fiou3 = None
 
-    excluded_indices = [i for i, name in enumerate(top100_label) if name in EXCLUDED_CLASS_NAMES]
+    excluded_indices = [
+        i for i, name in enumerate(top100_label) if name in EXCLUDED_CLASS_NAMES
+    ]
 
     def compute_mean_acc_excluded(confmat, fn_ignore, excluded_indices):
         """
@@ -444,7 +545,7 @@ def main():
                 continue
             tp = confmat[c, c]
             fn = np.sum(confmat[c, :]) - tp + fn_ignore[c]
-            gt = tp + fn                           # points of this gt‑class
+            gt = tp + fn  # points of this gt‑class
             if gt > 0:
                 acc_vals.append(tp / gt)
         return np.mean(acc_vals) if acc_vals else 0.0
@@ -482,11 +583,19 @@ def main():
                     freq_iou_ex += (pts / total_points_ex) * iou
         return miou_ex, freq_iou_ex
 
-    miou1_ex, fiou1_ex = compute_excluded(confusion_mat_top1, fn_ignore_top1, excluded_indices)
-    macc1_ex = compute_mean_acc_excluded(confusion_mat_top1, fn_ignore_top1, excluded_indices)
+    miou1_ex, fiou1_ex = compute_excluded(
+        confusion_mat_top1, fn_ignore_top1, excluded_indices
+    )
+    macc1_ex = compute_mean_acc_excluded(
+        confusion_mat_top1, fn_ignore_top1, excluded_indices
+    )
     if eval_top3:
-        miou3_ex, fiou3_ex = compute_excluded(confusion_mat_top3, fn_ignore_top3, excluded_indices)
-        macc3_ex = compute_mean_acc_excluded(confusion_mat_top3, fn_ignore_top3, excluded_indices)
+        miou3_ex, fiou3_ex = compute_excluded(
+            confusion_mat_top3, fn_ignore_top3, excluded_indices
+        )
+        macc3_ex = compute_mean_acc_excluded(
+            confusion_mat_top3, fn_ignore_top3, excluded_indices
+        )
     else:
         miou3_ex = fiou3_ex = None
 
@@ -494,7 +603,9 @@ def main():
     print("total valid points:", total_points)
     print("\n======== RESULTS ========")
     print("Top-1 Evaluation:")
-    print(f"  Global Accuracy:           {gacc1:.4f}  (or {top1_correct/total_points:.4f} by vertex-level check)")
+    print(
+        f"  Global Accuracy:           {gacc1:.4f}  (or {top1_correct / total_points:.4f} by vertex-level check)"
+    )
     print(f"  Mean Per-Class Accuracy:     {macc1:.4f}")
     print(f"  Mean IoU (mIoU):             {miou1:.4f}")
     print(f"  Foreground excluding classes: {EXCLUDED_CLASS_NAMES}")
@@ -514,7 +625,9 @@ def main():
 
     if eval_top3:
         print("\nTop-3 Evaluation:")
-        print(f"  Global Accuracy:           {gacc3:.4f}  (or {top3_correct/total_points:.4f} by vertex-level check)")
+        print(
+            f"  Global Accuracy:           {gacc3:.4f}  (or {top3_correct / total_points:.4f} by vertex-level check)"
+        )
         print(f"  Mean Per-Class Accuracy:     {macc3:.4f}")
         print(f"  Mean IoU (mIoU):             {miou3:.4f}")
         print(f"  Foreground excluding classes: {EXCLUDED_CLASS_NAMES}")
@@ -526,8 +639,9 @@ def main():
 
     # Restore stdout and save results to file
     sys.stdout = stdout_original
-    results_str = ''.join(results_capture)
+    results_str = "".join(results_capture)
     save_results_to_file(log_path, results_str, args)
+
 
 if __name__ == "__main__":
     main()

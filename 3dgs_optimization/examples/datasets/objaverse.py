@@ -7,8 +7,8 @@ from PIL import Image
 import zipfile
 import cv2
 from typing import Literal, Dict, Any
-from datasets.colmap_read_write import read_images_text
 from utils import compute_intrinsics_matrix
+
 
 class ObjaverseDataset(torch.utils.data.Dataset):
     def __init__(
@@ -16,7 +16,7 @@ class ObjaverseDataset(torch.utils.data.Dataset):
         data_root: str,
         split: Literal["train"] = "train",
         load_depth: bool = False,
-        zipped: bool = True, 
+        zipped: bool = True,
     ):
         self.meta = {}
         self.split = split
@@ -27,9 +27,7 @@ class ObjaverseDataset(torch.utils.data.Dataset):
         meta_path = self.data_root / "transforms_train.json"
 
         if not self.data_root.exists() or not meta_path.exists():
-            raise FileNotFoundError(
-                f"Meta file does not exist: {meta_path}"
-            )
+            raise FileNotFoundError(f"Meta file does not exist: {meta_path}")
 
         with open(meta_path, "r") as fp:
             self.meta = json.load(fp)
@@ -37,10 +35,10 @@ class ObjaverseDataset(torch.utils.data.Dataset):
         self.image_paths = []
         self.poses = []
 
-        self.fx = self.meta["fl_x"] 
-        self.fy = self.meta["fl_y"] 
-        self.cx = self.meta["cx"] 
-        self.cy = self.meta["cy"] 
+        self.fx = self.meta["fl_x"]
+        self.fy = self.meta["fl_y"]
+        self.cx = self.meta["cx"]
+        self.cy = self.meta["cy"]
 
         # Store paths to the zip files but do not open them yet
         self.image_zip_path = self.data_root / "image.zip"
@@ -53,7 +51,7 @@ class ObjaverseDataset(torch.utils.data.Dataset):
             # change from OpenGL/Blender camera axes (Y up, Z back) to COLMAP (Y down, Z forward)
             frame_name = frame["file_path"].split("/")[-1]
             pose = np.array(frame["transform_matrix"])
-            pose[:3, 1:3] *= -1 
+            pose[:3, 1:3] *= -1
 
             self.poses.append(pose)
             self.image_paths.append(frame_name)
@@ -77,7 +75,9 @@ class ObjaverseDataset(torch.utils.data.Dataset):
         try:
             image_name += ".png"
             if self.zipped:
-                assert self.image_zip_path.exists(), f"Zip file not found: {self.image_zip_path}"
+                assert (
+                    self.image_zip_path.exists()
+                ), f"Zip file not found: {self.image_zip_path}"
                 self._init_zip_refs()
                 with self.zip_ref.open(image_name) as file:
                     img = Image.open(file)
@@ -95,12 +95,16 @@ class ObjaverseDataset(torch.utils.data.Dataset):
         try:
             image_name += ".png"
             if self.zipped:
-                assert self.depth_zip_path.exists(), f"Zip file not found: {self.depth_zip_path}"
+                assert (
+                    self.depth_zip_path.exists()
+                ), f"Zip file not found: {self.depth_zip_path}"
                 self._init_zip_refs()
                 with self.depth_zip_ref.open(image_name) as file:
                     data = file.read()
                     data_array = np.frombuffer(data, np.uint8)
-                    img16 = cv2.imdecode(data_array, cv2.IMREAD_UNCHANGED).astype(np.float32)
+                    img16 = cv2.imdecode(data_array, cv2.IMREAD_UNCHANGED).astype(
+                        np.float32
+                    )
                     img = 8.0 * (65535.0 - img16) / 65535.0  # Depth range [0, 8]
 
             img_tensor = torch.from_numpy(np.array(img)).float()
@@ -112,7 +116,7 @@ class ObjaverseDataset(torch.utils.data.Dataset):
             return None
 
     def __getitem__(self, idx: int) -> Dict[str, Any]:
-        image_name = self.image_paths[idx] 
+        image_name = self.image_paths[idx]
         img = self._load_image(image_name)
         if img is None:
             return {"image_id": idx, "image_name": image_name, "image": None}
@@ -124,7 +128,7 @@ class ObjaverseDataset(torch.utils.data.Dataset):
             "image_id": idx,
             "image_name": image_name,
         }
-        
+
         if self.load_depth:
             depth = self._load_depth(image_name)
             if depth is None and self.load_depth:

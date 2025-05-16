@@ -1,15 +1,20 @@
-import os 
-import sys
+import os
 import numpy as np
-
-
 
 
 def get_arguments():
     import argparse
-    parser = argparse.ArgumentParser(description='Run 3DGS Gradient Backprojection Benchmark')
-    parser.add_argument('--split', type=str, default='/splits/matterport3d_mini_test.txt', help='Split name')
-    parser.add_argument('--rescale', type=int, default=0, help='rescale custom')
+
+    parser = argparse.ArgumentParser(
+        description="Run 3DGS Gradient Backprojection Benchmark"
+    )
+    parser.add_argument(
+        "--split",
+        type=str,
+        default="/splits/matterport3d_mini_test.txt",
+        help="Split name",
+    )
+    parser.add_argument("--rescale", type=int, default=0, help="rescale custom")
     parser.add_argument(
         "--data_root_path",
         type=str,
@@ -29,9 +34,7 @@ def get_arguments():
         help="Path to the results directory",
     )
 
-
     return parser.parse_args()
-
 
 
 if __name__ == "__main__":
@@ -46,16 +49,27 @@ if __name__ == "__main__":
     for scene in validation_set:
         # scene = scene.split('/')[-1]
         if args.rescale == 0:
-            potential_results_dir = os.path.join(result_root, scene, 'features_lseg_512_640.pt')
-            potential_xyz_dir = os.path.join(result_root, scene, 'xyz_lseg_512_640.npy')
+            potential_results_dir = os.path.join(
+                result_root, scene, "features_lseg_512_640.pt"
+            )
+            potential_xyz_dir = os.path.join(result_root, scene, "xyz_lseg_512_640.npy")
         elif args.rescale == 1:
-            potential_results_dir = os.path.join(result_root, scene, 'features_lseg_480_640.pt')
-            potential_xyz_dir = os.path.join(result_root, scene, 'xyz_lseg_480_640.npy')
+            potential_results_dir = os.path.join(
+                result_root, scene, "features_lseg_480_640.pt"
+            )
+            potential_xyz_dir = os.path.join(result_root, scene, "xyz_lseg_480_640.npy")
 
         if os.path.exists(potential_results_dir) and os.path.exists(potential_xyz_dir):
             print("Found potential results dir: ", potential_results_dir)
-            continue   
+            continue
         print(scene)
-        os.system("python backproject_ply_matterport.py --data_root_path {} --ply_root_path {} --results_root_dir {} \
-            --scene_name {} --rescale {}".format(args.data_root_path, args.ply_root_path, args.results_root_dir, scene, rescale))
-      
+        os.system(
+            "python backproject_ply_matterport.py --data_root_path {} --ply_root_path {} --results_root_dir {} \
+            --scene_name {} --rescale {}".format(
+                args.data_root_path,
+                args.ply_root_path,
+                args.results_root_dir,
+                scene,
+                rescale,
+            )
+        )

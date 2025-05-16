@@ -5,19 +5,15 @@ import json
 import torch.utils.data
 from pathlib import Path
 from PIL import Image
-import zipfile
-from typing import Literal, Dict, Any
-from datasets.colmap_read_write import read_images_text
 from utils import compute_intrinsics_matrix
 
+
 def gl2world_to_cv2world(gl2world):
-    cv2gl = np.array([[1, 0, 0, 0],
-                        [0, -1, 0, 0],
-                        [0, 0, -1, 0],
-                        [0, 0, 0, 1]])
+    cv2gl = np.array([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
     cv2world = gl2world @ cv2gl
 
     return cv2world
+
 
 class DL3DVDataset(torch.utils.data.Dataset):
     def __init__(
@@ -28,7 +24,7 @@ class DL3DVDataset(torch.utils.data.Dataset):
         self.meta = {}
         self.split = split
         self.data_root = Path(data_root)
-        meta_path = self.data_root / f"transforms.json"
+        meta_path = self.data_root / "transforms.json"
 
         if not self.data_root.exists() or not meta_path.exists():
             raise FileNotFoundError(
@@ -41,13 +37,15 @@ class DL3DVDataset(torch.utils.data.Dataset):
         self.image_paths = []
         self.poses = []
 
-        self.fx = self.meta["fl_x"] / 4 
+        self.fx = self.meta["fl_x"] / 4
         self.fy = self.meta["fl_y"] / 4
-        self.cx = self.meta["cx"] / 4 
-        self.cy = self.meta["cy"] / 4 
+        self.cx = self.meta["cx"] / 4
+        self.cy = self.meta["cy"] / 4
 
         # uniform sampling 10 frames for testing
-        test_indices = np.arange(0, len(self.meta["frames"]), len(self.meta["frames"]) // 10)
+        test_indices = np.arange(
+            0, len(self.meta["frames"]), len(self.meta["frames"]) // 10
+        )
         train_indices = set(np.arange(0, len(self.meta["frames"]))) - set(test_indices)
 
         if self.split == "test" or self.split == "val":
@@ -55,8 +53,6 @@ class DL3DVDataset(torch.utils.data.Dataset):
         else:
             train_indices = list(train_indices)
             selected_frames = [self.meta["frames"][i] for i in train_indices]
-
-
 
         for frame in selected_frames:
             self.image_paths.append(frame["file_path"].replace("images", "images_4"))
@@ -75,7 +71,6 @@ class DL3DVDataset(torch.utils.data.Dataset):
         img = Image.open(img_path)
         return img
 
-
     def __getitem__(self, idx: int) -> Dict[str, Any]:
         image_name = self.image_paths[idx]
         img = self._load_image(image_name)
@@ -83,8 +78,7 @@ class DL3DVDataset(torch.utils.data.Dataset):
         img = np.array(img.convert("RGB"))  # Ensure RGB format
 
         # Update the intrinsic matrix
-        intrinsics = compute_intrinsics_matrix(
-            self.fx, self.fy, self.cx, self.cy)
+        intrinsics = compute_intrinsics_matrix(self.fx, self.fy, self.cx, self.cy)
 
         # Convert the image to tensor
         img_tensor = torch.from_numpy(img).float()

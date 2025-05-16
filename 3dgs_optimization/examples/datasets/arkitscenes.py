@@ -1,13 +1,11 @@
-import os
 import json
 import zipfile
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 import torch
 from torch.utils.data import Dataset
 from PIL import Image
 import numpy as np
-from tqdm import tqdm
 
 
 class ARKitScenesDataset(Dataset):
@@ -37,7 +35,9 @@ class ARKitScenesDataset(Dataset):
         self.crop_edge = crop_edge
         self.resize_mode = resize_mode
         self.zipped = zipped
-        self.resize = resize if resize is not None else [960, 720]  # original highres: 1920x1440
+        self.resize = (
+            resize if resize is not None else [960, 720]
+        )  # original highres: 1920x1440
         self.frames = []  # List of dicts containing frame info
         self.wide_zip = None
         self.highres_depth_zip = None
@@ -72,7 +72,9 @@ class ARKitScenesDataset(Dataset):
                 and highres_depth_zip_path.exists()
                 and wide_intrinsics_zip_path.exists()
             )
-            assert is_zipped, f"Zipped files not found in the directory {self.scene_path}"
+            assert (
+                is_zipped
+            ), f"Zipped files not found in the directory {self.scene_path}"
             self.wide_zip_path = wide_zip_path
             self.highres_depth_zip_path = highres_depth_zip_path
             self.wide_intrinsics_zip_path = wide_intrinsics_zip_path

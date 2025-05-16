@@ -1,5 +1,4 @@
 import json
-import os
 import numpy as np
 from pathlib import Path
 from typing import Tuple, Optional, List
@@ -18,6 +17,7 @@ from datasets.replica import ReplicaDataset
 from datasets.objaverse import ObjaverseDataset
 from datasets.holicity import HoliCityDataset
 from datasets.aria_synthetic_env import AriaSyntheticEnvsDataset
+
 
 @dataclass
 class DatasetHandler:
@@ -42,20 +42,24 @@ def initialize_datasets(cfg) -> Tuple[Optional[Parser], any, any]:
     Returns:
         A tuple containing the parser (if any), training dataset, and validation dataset.
     """
-    supported_datasets = ["colmap", 
-                          "blender", 
-                          "scannet", 
-                          "scannetpp", 
-                          "scannetpp_v2", 
-                          "arkitscenes",
-                          "matterport3d_region",
-                          "dl3dv", 
-                          "replica", 
-                          "hypersim", 
-                          "objaverse",
-                          "holicity",
-                          "aria_synthetic_env"]
-    if not any([dataset_name in cfg.dataset_name for dataset_name in supported_datasets]):
+    supported_datasets = [
+        "colmap",
+        "blender",
+        "scannet",
+        "scannetpp",
+        "scannetpp_v2",
+        "arkitscenes",
+        "matterport3d_region",
+        "dl3dv",
+        "replica",
+        "hypersim",
+        "objaverse",
+        "holicity",
+        "aria_synthetic_env",
+    ]
+    if not any(
+        [dataset_name in cfg.dataset_name for dataset_name in supported_datasets]
+    ):
         raise ValueError(f"Dataset {cfg.dataset_name} not supported.")
 
     parser = None
@@ -65,7 +69,7 @@ def initialize_datasets(cfg) -> Tuple[Optional[Parser], any, any]:
     init_bbox_min = None
     init_bbox_max = None
     scene_scale = 1.0  # modify per dataset, if needed
-    
+
     mesh_init = False
     if cfg.dataset_name == "colmap":
         # Colmap format
@@ -104,13 +108,9 @@ def initialize_datasets(cfg) -> Tuple[Optional[Parser], any, any]:
         trainset = ScannetppDataset(
             data_root=cfg.data_dir,
             split="train+test",
-            zipped=False # change accordingly
+            zipped=False,  # change accordingly
         )
-        valset = ScannetppDataset(
-            data_root=cfg.data_dir,
-            split="test",
-            zipped=False
-        )
+        valset = ScannetppDataset(data_root=cfg.data_dir, split="test", zipped=False)
         json_path = (
             Path(cfg.data_dir) / "dslr" / "nerfstudio" / "transforms_undistorted.json"
         )
@@ -139,7 +139,7 @@ def initialize_datasets(cfg) -> Tuple[Optional[Parser], any, any]:
         )
         valset = Matterport3DRegionDataset(
             data_root=cfg.data_dir,
-            split="test", # randomly sampled from the train set
+            split="test",  # randomly sampled from the train set
         )
         json_path = Path(cfg.data_dir) / "transforms_train.json"
         scene_name = Path(cfg.data_dir).name
@@ -176,17 +176,11 @@ def initialize_datasets(cfg) -> Tuple[Optional[Parser], any, any]:
         points3d_data = load_points3d(points3d_path)
 
     elif "dl3dv" in cfg.dataset_name:
-        trainset = DL3DVDataset(
-            data_root=cfg.data_dir,
-            split="train"
-        )
-        valset = DL3DVDataset(
-            data_root=cfg.data_dir,
-            split="test"
-        )
-        # trimesh 
+        trainset = DL3DVDataset(data_root=cfg.data_dir, split="train")
+        valset = DL3DVDataset(data_root=cfg.data_dir, split="test")
+        # trimesh
         json_path = Path(cfg.data_dir) / "transforms.json"
-        points3d_path =  Path(cfg.data_dir) / f"fused.ply" 
+        points3d_path = Path(cfg.data_dir) / "fused.ply"
         points3d_data = load_points3d(points3d_path)
 
     elif "objaverse" in cfg.dataset_name:
@@ -199,11 +193,17 @@ def initialize_datasets(cfg) -> Tuple[Optional[Parser], any, any]:
             split="train",  # eval on all training views
         )
         json_path = Path(cfg.data_dir) / "transforms_train.json"
-        points3d_path =  Path(cfg.data_dir.replace("renders", "glbs") + ".glb")
+        points3d_path = Path(cfg.data_dir.replace("renders", "glbs") + ".glb")
         # surface sampling to get strategy_cap_max num of points
-        # points3d_data = load_points3d(points3d_path, mesh_input=True, upper_num=cfg.strategy.cap_max, surface_sampling=True) 
-        points3d_data = load_points3d(points3d_path, mesh_input=True, surface_sampling=False, upper_num=50000, normalize_scale=True)
-    
+        # points3d_data = load_points3d(points3d_path, mesh_input=True, upper_num=cfg.strategy.cap_max, surface_sampling=True)
+        points3d_data = load_points3d(
+            points3d_path,
+            mesh_input=True,
+            surface_sampling=False,
+            upper_num=50000,
+            normalize_scale=True,
+        )
+
     elif "holicity" in cfg.dataset_name:
         trainset = HoliCityDataset(
             data_root=cfg.data_dir,
@@ -214,7 +214,7 @@ def initialize_datasets(cfg) -> Tuple[Optional[Parser], any, any]:
             split="train",
         )
         json_path = Path(cfg.data_dir) / "transforms_train.json"
-        points3d_path =  Path(cfg.data_dir) / "points3d.ply" 
+        points3d_path = Path(cfg.data_dir) / "points3d.ply"
         points3d_data = load_points3d(points3d_path)
 
     elif "aria_synthetic_env" in cfg.dataset_name:
@@ -229,7 +229,7 @@ def initialize_datasets(cfg) -> Tuple[Optional[Parser], any, any]:
             zipped=True,
         )
         json_path = Path(cfg.data_dir) / "transforms_train.json"
-        points3d_path =  Path(cfg.data_dir) / "points3d_fused.ply" 
+        points3d_path = Path(cfg.data_dir) / "points3d_fused.ply"
         points3d_data = load_points3d(points3d_path)
 
     else:
@@ -251,10 +251,13 @@ def initialize_datasets(cfg) -> Tuple[Optional[Parser], any, any]:
     #     o3d.io.write_point_cloud("init_points3d.ply", points3d)
 
     if cfg.cap_max_by_init_point_num and init_point_num:
-        cap_max = min( round(1.5 * init_point_num / 1_000) * 1_000, cfg.strategy.cap_max)
+        cap_max = min(round(1.5 * init_point_num / 1_000) * 1_000, cfg.strategy.cap_max)
         cfg.strategy.cap_max = int(cap_max)
-        
-    if cfg.strategy.name == "mcmc" and points3d_data["points"].shape[0] > cfg.strategy.cap_max:
+
+    if (
+        cfg.strategy.name == "mcmc"
+        and points3d_data["points"].shape[0] > cfg.strategy.cap_max
+    ):
         # randomly sample points3d_data
         idx = np.random.choice(
             len(points3d_data["points"]), cfg.strategy.cap_max, replace=False
@@ -276,4 +279,3 @@ def initialize_datasets(cfg) -> Tuple[Optional[Parser], any, any]:
         scene_scale=scene_scale,
         scene_name=cfg.data_dir.split("/")[-1],
     )
-

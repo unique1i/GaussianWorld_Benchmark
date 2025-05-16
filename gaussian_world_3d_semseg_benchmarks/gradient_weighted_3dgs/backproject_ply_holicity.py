@@ -1,10 +1,9 @@
-import math
 import os
 import time
 from typing import Literal
 import torch
-import tyro
 from gsplat import rasterization
+
 # import pycolmap_scene_manager as pycolmap
 import numpy as np
 import matplotlib
@@ -13,27 +12,18 @@ matplotlib.use("TkAgg")  # To avoid conflict with cv2
 from tqdm import tqdm
 from lseg import LSegNet
 import json
-from pathlib import Path
 
 from utils import (
     load_ply,
-    load_checkpoint,
     get_viewmat_from_colmap_image,
-    prune_by_gradients,
-    prune_by_gradients_json,
-    prune_by_gradients_opencv,
-    test_proper_pruning_opencv,
-    test_proper_pruning,
-    test_proper_pruning_json,
-    prune_by_gradients_matterport,
-    test_proper_pruning_matterport,
     prune_by_gradients_holicity,
     test_proper_pruning_holicity,
 )
 
 
-
-def create_feature_field_lseg(splats, batch_size=1, use_cpu=False, inverse_extrinsics=True, resize=[512, 640]):
+def create_feature_field_lseg(
+    splats, batch_size=1, use_cpu=False, inverse_extrinsics=True, resize=[512, 640]
+):
     device = "cpu" if use_cpu else "cuda"
 
     net = LSegNet(
@@ -90,14 +80,14 @@ def create_feature_field_lseg(splats, batch_size=1, use_cpu=False, inverse_extri
         width = contents["width"]
         height = contents["height"]
 
-
         fx = contents["fl_x"] if "fl_x" in contents else contents["fx"]
         fy = contents["fl_y"] if "fl_y" in contents else contents["fy"]
         cx = contents["cx"]
         cy = contents["cy"]
 
-        for idx, frame in tqdm(enumerate(frames), desc="Feature backprojection (frames)", total=len(frames)):
-   
+        for idx, frame in tqdm(
+            enumerate(frames), desc="Feature backprojection (frames)", total=len(frames)
+        ):
             # NeRF 'transform_matrix' is a camera-to-world transform
             c2w = np.array(frame["transform_matrix"])
             # get the world-to-camera transform and set R, T
@@ -105,7 +95,7 @@ def create_feature_field_lseg(splats, batch_size=1, use_cpu=False, inverse_extri
             # some dataset save world-to-camera, some camera-to-world, careful!
             w2c = np.linalg.inv(c2w)
             # w2c[1:3] *= -1
-            R = w2c[:3,:3]  # R is stored transposed due to 'glm' in CUDA code
+            R = w2c[:3, :3]  # R is stored transposed due to 'glm' in CUDA code
             T = w2c[:3, 3]
 
             viewmat = torch.eye(4).float()  # .to(device)
@@ -114,11 +104,11 @@ def create_feature_field_lseg(splats, batch_size=1, use_cpu=False, inverse_extri
 
             resize_ratio = resize[1] / 640
             fx_resize = fx * resize_ratio
-            
+
             fy_resize = fy * resize_ratio
             cx_resize = cx * resize_ratio
             cy_resize = cy * resize_ratio
-            
+
             K = torch.tensor(
                 [
                     [fx_resize, 0, cx_resize],
@@ -131,7 +121,6 @@ def create_feature_field_lseg(splats, batch_size=1, use_cpu=False, inverse_extri
             # height = int(K[1, 2] * 2)
             width = resize[1]
             height = resize[0]
-            
 
             with torch.no_grad():
                 output, _, meta = rasterization(
@@ -260,7 +249,6 @@ def create_feature_field_dino(splats):
 
     print("Distilling features...")
     for image in tqdm(sorted(colmap_project.images.values(), key=lambda x: x.name)):
-
         image_name = image.name  # .split(".")[0] + ".jpg"
 
         viewmat = get_viewmat_from_colmap_image(image)
@@ -350,16 +338,13 @@ def main(
     data_root_path: str = "/holicity_mini_val_set_suite/original_data",
     ply_root_path: str = "/holicity_mini_val_set_suite/mcmc_3dgs",  # checkpoint path, can generate from original 3DGS repo
     results_root_dir: str = "./results/holicity/",  # output path
-    rasterizer: Literal[
-        "inria", "gsplat"
-    ] = "gsplat",  
+    rasterizer: Literal["inria", "gsplat"] = "gsplat",
     feature_field_batch_count: int = 1,  # Number of batches to process for feature field
     run_feature_field_on_cpu: bool = False,  # Run feature field on CPU
     feature: Literal["lseg", "dino"] = "lseg",  # Feature field type
     scene_i: str = "ytwUEEljP6RgoV0MviqvsQ_LD",  # Scene name
     rescale: int = 0,  # Rescale factor for images
 ):
-
     print("Processing scene:", scene_i)
     result_i_dir = os.path.join(results_root_dir, scene_i)
 
@@ -369,7 +354,7 @@ def main(
     torch.set_default_device("cuda")
 
     os.makedirs(result_i_dir, exist_ok=True)
-    ply_path_i = os.path.join(ply_root_path, scene_i, 'ckpts', 'point_cloud_9000.ply')
+    ply_path_i = os.path.join(ply_root_path, scene_i, "ckpts", "point_cloud_9000.ply")
     data_dir = os.path.join(data_root_path, scene_i)
     splats = load_ply(
         ply_path_i, data_dir, rasterizer=rasterizer, dataset="holicity", max_sh_degree=0
@@ -385,7 +370,10 @@ def main(
             feat_save_path = f"{result_i_dir}/features_lseg_512_512.pt"
             if not os.path.exists(feat_save_path):
                 features = create_feature_field_lseg(
-                    splats, feature_field_batch_count, run_feature_field_on_cpu,resize=[512, 512]
+                    splats,
+                    feature_field_batch_count,
+                    run_feature_field_on_cpu,
+                    resize=[512, 512],
                 )
                 torch.save(features, feat_save_path)
 
@@ -394,7 +382,6 @@ def main(
                 xyz = splats["means"].cpu().numpy()
                 np.save(xyz_save_path, xyz)
 
-   
         try:
             del splats
             del features
@@ -403,8 +390,8 @@ def main(
             print("Error in deleting variables", e)
 
 
-
 import argparse
+
 
 def get_arguments():
     argparser = argparse.ArgumentParser(description="Feature Field Extraction")
@@ -442,7 +429,6 @@ def get_arguments():
     return argparser.parse_args()
 
 
-
 if __name__ == "__main__":
     # tyro.cli(main)
     args = get_arguments()
@@ -453,4 +439,3 @@ if __name__ == "__main__":
         scene_i=args.scene_name,
         rescale=args.rescale,
     )
-

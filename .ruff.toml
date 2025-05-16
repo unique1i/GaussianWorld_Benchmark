@@ -1,8 +1,0 @@
-[lint]
-select = ["E", "F", "I", "B"]   # keep your set
-ignore = ["E501"]               # drop line-length from “blocking” rules
-
-[lint.per-file-ignores]
-"**/__init__.py" = ["F401"]     # silence re-exports
-
-

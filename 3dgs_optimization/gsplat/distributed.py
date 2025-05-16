@@ -143,8 +143,7 @@ def all_gather_tensor_list(world_size: int, tensor_list: List[Tensor]) -> List[T
 
     N = len(tensor_list[0])
     for tensor in tensor_list:
-        assert len(
-            tensor) == N, "All tensors should have the same first dimension size"
+        assert len(tensor) == N, "All tensors should have the same first dimension size"
 
     # concatenate tensors and record their sizes
     data = torch.cat([t.reshape(N, -1) for t in tensor_list], dim=-1)
@@ -221,8 +220,7 @@ def all_to_all_tensor_list(
 
     N = len(tensor_list[0])
     for tensor in tensor_list:
-        assert len(
-            tensor) == N, "All tensors should have the same first dimension size"
+        assert len(tensor) == N, "All tensors should have the same first dimension size"
 
     assert (
         len(splits) == world_size
@@ -236,8 +234,7 @@ def all_to_all_tensor_list(
     if output_splits is not None:
         collected_splits = output_splits
     else:
-        collected_splits = all_to_all_int32(
-            world_size, splits, device=data.device)
+        collected_splits = all_to_all_int32(world_size, splits, device=data.device)
     collected = [
         torch.empty((l, *data.shape[1:]), dtype=data.dtype, device=data.device)
         for l in collected_splits
@@ -249,8 +246,7 @@ def all_to_all_tensor_list(
         distF.all_to_all(collected, data.split(splits, dim=0))
     else:
         # non-differentiable all_to_all
-        torch.distributed.all_to_all(
-            collected, list(data.split(splits, dim=0)))
+        torch.distributed.all_to_all(collected, list(data.split(splits, dim=0)))
     collected = torch.cat(collected, dim=0)
 
     # split the collected tensor and reshape to the original shape

@@ -1,10 +1,9 @@
-import math
 import os
 import time
 from typing import Literal
 import torch
-import tyro
 from gsplat import rasterization
+
 # import pycolmap_scene_manager as pycolmap
 import numpy as np
 import matplotlib
@@ -13,22 +12,17 @@ matplotlib.use("TkAgg")  # To avoid conflict with cv2
 from tqdm import tqdm
 from lseg import LSegNet
 import json
-from pathlib import Path
 
 from utils import (
     load_ply,
-    load_checkpoint,
-    get_viewmat_from_colmap_image,
-    prune_by_gradients,
-    prune_by_gradients_json,
     prune_by_gradients_opencv,
     test_proper_pruning_opencv,
-    test_proper_pruning,
-    test_proper_pruning_json,
 )
 
 
-def create_feature_field_lseg(splats, batch_size=1, use_cpu=False, inverse_extrinsics=True, resize=[480, 640]):
+def create_feature_field_lseg(
+    splats, batch_size=1, use_cpu=False, inverse_extrinsics=True, resize=[480, 640]
+):
     device = "cpu" if use_cpu else "cuda"
 
     net = LSegNet(
@@ -83,10 +77,10 @@ def create_feature_field_lseg(splats, batch_size=1, use_cpu=False, inverse_extri
         focal_len_x = contents["fl_x"] if "fl_x" in contents else contents["fx"]
         focal_len_y = contents["fl_y"] if "fl_y" in contents else contents["fy"]
 
-        cx = contents["cx"] 
+        cx = contents["cx"]
         cy = contents["cy"]
         if "crop_edge" in contents:
-            cx -= contents["crop_edge"] 
+            cx -= contents["crop_edge"]
             cy -= contents["crop_edge"]
         if "w" in contents and "h" in contents:
             # scannetpp case, fx, fy, cx, cy in scannetpp json are for 1752*1168, not our target size
@@ -95,15 +89,16 @@ def create_feature_field_lseg(splats, batch_size=1, use_cpu=False, inverse_extri
             # scannet case, fx, fy, cx, cy in scannet json are already for image size 640x480
             width, height = contents["resize"]
             if "crop_edge" in contents:
-                width -= 2*contents["crop_edge"]
-                height -= 2*contents["crop_edge"]
+                width -= 2 * contents["crop_edge"]
+                height -= 2 * contents["crop_edge"]
         else:
             # if not specify, we assume the weight and height are twice the cx and cy
-            width, height = cx * 2, cy * 2 
+            width, height = cx * 2, cy * 2
         frames = contents["frames"]
-        for idx, frame in tqdm(enumerate(frames), desc="Feature backprojection (frames)", total=len(frames)):
+        for idx, frame in tqdm(
+            enumerate(frames), desc="Feature backprojection (frames)", total=len(frames)
+        ):
             # NeRF 'transform_matrix' is a camera-to-world transform
-
 
             c2w = np.array(frame["transform_matrix"])
             # get the world-to-camera transform and set R, T
@@ -111,7 +106,7 @@ def create_feature_field_lseg(splats, batch_size=1, use_cpu=False, inverse_extri
             # some dataset save world-to-camera, some camera-to-world, careful!
             w2c = np.linalg.inv(c2w)
             # w2c[1:3] *= -1
-            R = w2c[:3,:3]  # R is stored transposed due to 'glm' in CUDA code
+            R = w2c[:3, :3]  # R is stored transposed due to 'glm' in CUDA code
             T = w2c[:3, 3]
 
             # image_path = os.path.join(image_path, f'{cam_name + extension}')
@@ -119,14 +114,16 @@ def create_feature_field_lseg(splats, batch_size=1, use_cpu=False, inverse_extri
             viewmat = torch.eye(4).float()  # .to(device)
             viewmat[:3, :3] = torch.tensor(R).float()  # .to(device)
             viewmat[:3, 3] = torch.tensor(T).float()  # .to(device)
-            resize_ratio = resize[1] / (640 - 2 * contents["crop_edge"]) if "crop_edge" in contents else 0
+            resize_ratio = (
+                resize[1] / (640 - 2 * contents["crop_edge"])
+                if "crop_edge" in contents
+                else 0
+            )
             fx_resize = focal_len_x * resize_ratio
-            
+
             fy_resize = focal_len_y * resize_ratio
             cx_resize = cx * resize_ratio
             cy_resize = cy * resize_ratio
-            
-
 
             K = torch.tensor(
                 [
@@ -138,7 +135,6 @@ def create_feature_field_lseg(splats, batch_size=1, use_cpu=False, inverse_extri
 
             width = resize[1]
             height = resize[0]
-
 
             with torch.no_grad():
                 output, _, meta = rasterization(
@@ -228,12 +224,10 @@ def create_feature_field_lseg(splats, batch_size=1, use_cpu=False, inverse_extri
 
 
 def main(
-    data_root_path: str = "/scannet_mini_val_set_suite/original_data/", # subset
+    data_root_path: str = "/scannet_mini_val_set_suite/original_data/",  # subset
     ply_root_path: str = "/scannet_mini_val_set_suite/mcmc_3dgs/",  # checkpoint path, can generate from original 3DGS repo
     results_root_dir: str = "./results/scannet/",  # output path
-    rasterizer: Literal[
-        "inria", "gsplat"
-    ] = "gsplat",  
+    rasterizer: Literal["inria", "gsplat"] = "gsplat",
     feature_field_batch_count: int = 1,  # Number of batches to process for feature field
     run_feature_field_on_cpu: bool = False,  # Run feature field on CPU
     feature: Literal["lseg", "dino"] = "lseg",  # Feature field type
@@ -249,11 +243,9 @@ def main(
     torch.set_default_device("cuda")
 
     os.makedirs(result_i_dir, exist_ok=True)
-    ply_path_i = os.path.join(ply_root_path, scene_i, 'ckpts', 'point_cloud_30000.ply')
+    ply_path_i = os.path.join(ply_root_path, scene_i, "ckpts", "point_cloud_30000.ply")
     data_dir = os.path.join(data_root_path, scene_i)
-    splats = load_ply(
-        ply_path_i, data_dir, rasterizer=rasterizer, dataset="scannet"
-    )
+    splats = load_ply(ply_path_i, data_dir, rasterizer=rasterizer, dataset="scannet")
     splats_optimized = prune_by_gradients_opencv(splats)
 
     test_proper_pruning_opencv(splats, splats_optimized)
@@ -266,7 +258,10 @@ def main(
             features_save_dir = f"{result_i_dir}/features_lseg_480_640.pt"
             if not os.path.exists(features_save_dir):
                 features = create_feature_field_lseg(
-                    splats, feature_field_batch_count, run_feature_field_on_cpu,resize=[480, 640]
+                    splats,
+                    feature_field_batch_count,
+                    run_feature_field_on_cpu,
+                    resize=[480, 640],
                 )
                 torch.save(features, features_save_dir)
             else:
@@ -274,7 +269,7 @@ def main(
 
             xyz_save_dir = f"{result_i_dir}/xyz_lseg_480_640.npy"
             if not os.path.exists(xyz_save_dir):
-                xyz = splats_optimized['means'].cpu().numpy()
+                xyz = splats_optimized["means"].cpu().numpy()
                 xyz = xyz.reshape(-1, 3)
                 np.save(xyz_save_dir, xyz)
 
@@ -284,6 +279,7 @@ def main(
 
 
 import argparse
+
 
 def get_arguments():
     argparser = argparse.ArgumentParser(description="Feature Field Extraction")
@@ -321,7 +317,6 @@ def get_arguments():
     return argparser.parse_args()
 
 
-
 if __name__ == "__main__":
     # tyro.cli(main)
     args = get_arguments()
@@ -332,4 +327,3 @@ if __name__ == "__main__":
         scene_i=args.scene_name,
         rescale=args.rescale,
     )
-

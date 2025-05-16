@@ -1,11 +1,9 @@
-import torch
 import torch.nn as nn
 
 from .lseg_vit import (
     _make_pretrained_clip_vitl16_384,
     _make_pretrained_clip_vitb32_384,
     _make_pretrained_clipRN50x16_vitl16_384,
-    forward_vit,
     _make_fullclip_vitl14_384,
 )
 
@@ -22,7 +20,7 @@ def _make_encoder(
     use_readout="ignore",
     enable_attention_hooks=False,
 ):
-    if backbone == "fullclip_vitl14_384": # full clip
+    if backbone == "fullclip_vitl14_384":  # full clip
         clip_pretrained, pretrained = _make_fullclip_vitl14_384(
             use_pretrained,
             hooks=hooks,
@@ -31,8 +29,8 @@ def _make_encoder(
         )
         scratch = _make_scratch(
             [256, 512, 1024, 1024], features, groups=groups, expand=expand
-        ) 
-    elif backbone == "clip_vitl16_384": 
+        )
+    elif backbone == "clip_vitl16_384":
         clip_pretrained, pretrained = _make_pretrained_clip_vitl16_384(
             use_pretrained,
             hooks=hooks,
@@ -41,7 +39,7 @@ def _make_encoder(
         )
         scratch = _make_scratch(
             [256, 512, 1024, 1024], features, groups=groups, expand=expand
-        ) 
+        )
     elif backbone == "clipRN50x16_vitl16_384":
         clip_pretrained, pretrained = _make_pretrained_clipRN50x16_vitl16_384(
             use_pretrained,
@@ -54,13 +52,13 @@ def _make_encoder(
         )
     elif backbone == "clip_vitb32_384":
         clip_pretrained, pretrained = _make_pretrained_clip_vitb32_384(
-            use_pretrained, 
-            hooks=hooks, 
+            use_pretrained,
+            hooks=hooks,
             use_readout=use_readout,
         )
         scratch = _make_scratch(
             [96, 192, 384, 768], features, groups=groups, expand=expand
-        ) 
+        )
     else:
         print(f"Backbone '{backbone}' not implemented")
         assert False
@@ -224,7 +222,10 @@ class FeatureFusionBlock(nn.Module):
         output = self.resConfUnit2(output)
 
         output = nn.functional.interpolate(
-            output, scale_factor=2, mode="bilinear", align_corners=True
+            output,
+            scale_factor=2,
+            mode="bilinear",
+            align_corners=True,
             # output, scale_factor=2, mode="bilinear", align_corners=False
         )
 
@@ -369,4 +370,3 @@ class FeatureFusionBlock_custom(nn.Module):
         output = self.out_conv(output)
 
         return output
-

@@ -10,6 +10,7 @@ from tqdm import tqdm
 # 1. Basic I/O Utilities
 ###################################
 
+
 def load_scene_list(val_split_path):
     """
     Reads a .txt file listing validation scenes (one per line).
@@ -19,6 +20,7 @@ def load_scene_list(val_split_path):
         lines = f.readlines()
     scene_ids = [line.strip() for line in lines if len(line.strip()) > 0]
     return scene_ids
+
 
 def read_ply_file_3dgs(file_path):
     """
@@ -34,19 +36,21 @@ def read_ply_file_3dgs(file_path):
     xyz = np.stack([x, y, z], axis=-1)
     return xyz, opacity
 
+
 ###################################
 # 2. CLIP Relevancy Scoring
 ###################################
 
+
 @torch.no_grad()
 def compute_relevancy_scores(
-    lang_feat: torch.Tensor,      # shape: (N, 512)
-    text_feat: torch.Tensor,      # shape: (C, 512)
-    canon_feat: torch.Tensor,     # shape: (K, 512)
+    lang_feat: torch.Tensor,  # shape: (N, 512)
+    text_feat: torch.Tensor,  # shape: (C, 512)
+    canon_feat: torch.Tensor,  # shape: (K, 512)
     device: torch.device,
 ):
     """
-    Computes the "relevancy score" for each of the C text classes 
+    Computes the "relevancy score" for each of the C text classes
     for each of the N 3DGS embeddings, returning the argmax along classes.
 
     Score_c = min_i [ exp(lang . text_c) / (exp(lang . canon_i) + exp(lang . text_c)) ].
@@ -54,14 +58,14 @@ def compute_relevancy_scores(
     Returns predicted_label : (N,) in [0..C-1]
     """
     # Move to device
-    lang_feat = lang_feat.to(device, non_blocking=True)  
-    text_feat = text_feat.to(device, non_blocking=True)  
+    lang_feat = lang_feat.to(device, non_blocking=True)
+    text_feat = text_feat.to(device, non_blocking=True)
     canon_feat = canon_feat.to(device, non_blocking=True)
 
-    dot_lang_text = torch.matmul(lang_feat, text_feat.t())    # (N, C)
+    dot_lang_text = torch.matmul(lang_feat, text_feat.t())  # (N, C)
     dot_lang_canon = torch.matmul(lang_feat, canon_feat.t())  # (N, K)
 
-    exp_lang_text = dot_lang_text.exp()    # (N, C)
+    exp_lang_text = dot_lang_text.exp()  # (N, C)
     exp_lang_canon = dot_lang_canon.exp()  # (N, K)
 
     N, C = dot_lang_text.shape
@@ -77,12 +81,14 @@ def compute_relevancy_scores(
         relevancy_scores.append(score_c)
 
     relevancy_matrix = torch.stack(relevancy_scores, dim=0).t()  # (N, C)
-    pred_label = torch.argmax(relevancy_matrix, dim=1)           # (N,)
+    pred_label = torch.argmax(relevancy_matrix, dim=1)  # (N,)
     return pred_label.cpu().numpy()
+
 
 ###################################
 # 3. Main Evaluation Script
 ###################################
+
 
 def main():
     # ------------------------------
@@ -96,7 +102,9 @@ def main():
     # scannetpp_3dgs_root = "/home/yli7/scratch2/datasets/gaussian_world/scannetpp_3dgs_default_depth_true"
     scannetpp_3dgs_root = "/home/yli7/scratch2/outputs/scannetpp_v1_default_fix_xyz_gs"
     # scannetpp_langfeat_root = "/home/yli7/scratch2/datasets/gaussian_world/scannetpp_lang_feat"
-    scannetpp_langfeat_root = "/home/yli7/scratch2/outputs/scannetpp_v1_default_fix_xyz_gs/language_features"
+    scannetpp_langfeat_root = (
+        "/home/yli7/scratch2/outputs/scannetpp_v1_default_fix_xyz_gs/language_features"
+    )
 
     # The top-100 classes text file
     text_path = "/home/yli7/scratch2/datasets/scannetpp_v1/metadata/semantic_benchmark/top100.txt"
@@ -113,7 +121,9 @@ def main():
     # ------------------------------
     # 2) Load CLIP model & text embeddings
     # ------------------------------
-    model, _, _ = open_clip.create_model_and_transforms("ViT-B-16", pretrained="laion2b_s34b_b88k")
+    model, _, _ = open_clip.create_model_and_transforms(
+        "ViT-B-16", pretrained="laion2b_s34b_b88k"
+    )
     model = model.eval().to(device)
 
     tokenizer = open_clip.get_tokenizer("ViT-B-16")
@@ -121,7 +131,9 @@ def main():
     # Read top-100 label names
     with open(text_path, "r") as f:
         lines = f.readlines()
-    top100_label_init = [line.strip() for line in lines]   # e.g. ["wall", "floor", "chair", ...]
+    top100_label_init = [
+        line.strip() for line in lines
+    ]  # e.g. ["wall", "floor", "chair", ...]
     top100_label_prompt = ["this is a " + label for label in top100_label_init]
 
     # Encode top-100 text
@@ -152,7 +164,9 @@ def main():
     for scene_id in tqdm(scene_ids, desc="Scene", dynamic_ncols=True):
         # Our official preprocessed data is in scannetpp_preprocessed_root/<split>/<scene_id>/
         # Here we are evaluating the "val" split. So:
-        scene_preproc_folder = os.path.join(scannetpp_preprocessed_root, "val", scene_id)
+        scene_preproc_folder = os.path.join(
+            scannetpp_preprocessed_root, "val", scene_id
+        )
         if not os.path.isdir(scene_preproc_folder):
             print(f"[Warning] Preprocessed folder not found: {scene_preproc_folder}")
             continue
@@ -165,12 +179,12 @@ def main():
             print(f"[Warning] Missing coord.npy or segment.npy for scene {scene_id}")
             continue
 
-        coord = np.load(coord_path)               # shape (N, 3)
-        segment = np.load(segment_path)           # shape (N, 3); first column => top-100 index
-        labeled_gt = segment[:, 0]                # int16 in [0..99] or ignore_index (<0)
+        coord = np.load(coord_path)  # shape (N, 3)
+        segment = np.load(segment_path)  # shape (N, 3); first column => top-100 index
+        labeled_gt = segment[:, 0]  # int16 in [0..99] or ignore_index (<0)
 
         # Keep only valid labels
-        valid_mask = (labeled_gt >= 0)
+        valid_mask = labeled_gt >= 0
         if np.sum(valid_mask) == 0:
             continue
 
@@ -179,7 +193,9 @@ def main():
 
         # (b) Load 3DGS & CLIP feats
         scene_3dgs_folder = os.path.join(scannetpp_3dgs_root, scene_id)
-        three_dgs_ckpt = os.path.join(scene_3dgs_folder, "ckpts", "point_cloud_30000.ply")
+        three_dgs_ckpt = os.path.join(
+            scene_3dgs_folder, "ckpts", "point_cloud_30000.ply"
+        )
         if not os.path.isfile(three_dgs_ckpt):
             print(f"[Warning] 3DGS .ply not found for scene {scene_id}")
             continue
@@ -191,11 +207,13 @@ def main():
             print(f"[Warning] Language feature .pth not found for scene {scene_id}")
             continue
         gauss_lang_feat = torch.load(langfeat_path)[0].cpu()  # (G, 512)
-        print(f"\nLoaded {gauss_xyz.shape[0]} 3DGS and {gauss_lang_feat.shape[0]} language features for {scene_id}")
+        print(
+            f"\nLoaded {gauss_xyz.shape[0]} 3DGS and {gauss_lang_feat.shape[0]} language features for {scene_id}"
+        )
 
         # Filter out zero vectors if needed
         norms = gauss_lang_feat.norm(dim=1)
-        keep_mask = (norms > 0)
+        keep_mask = norms > 0
         gauss_xyz = gauss_xyz[keep_mask.numpy()]
         gauss_lang_feat = gauss_lang_feat[keep_mask]
         if gauss_xyz.shape[0] == 0:
@@ -210,9 +228,9 @@ def main():
         # (d) Relevancy scoring => predicted label
         pred_label = compute_relevancy_scores(
             nn_lang_feat,
-            text_feat,     # (100, 512)
-            canon_feat,    # (4, 512)
-            device=device
+            text_feat,  # (100, 512)
+            canon_feat,  # (4, 512)
+            device=device,
         )  # shape (M,)
 
         # (e) Accumulate confusion
@@ -255,9 +273,10 @@ def main():
 
     # Print final
     print("\n======== RESULTS ========")
-    print("Per-class IoU:", {
-        top100_label_init[c]: round(ious[c], 4) for c in range(num_classes)
-    })
+    print(
+        "Per-class IoU:",
+        {top100_label_init[c]: round(ious[c], 4) for c in range(num_classes)},
+    )
     print(f"Mean IoU: {mean_iou:.4f}")
     print(f"Global Accuracy: {global_acc:.4f}")
     print(f"Mean Class Accuracy: {mean_class_acc:.4f}")

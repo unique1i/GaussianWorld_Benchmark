@@ -1,13 +1,11 @@
-import os
 import json
 import zipfile
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 import torch
 from torch.utils.data import Dataset
 from PIL import Image
 import numpy as np
-from tqdm import tqdm
 
 
 class Matterport3DRegionDataset(Dataset):
@@ -69,10 +67,7 @@ class Matterport3DRegionDataset(Dataset):
             images_dir = self.scene_path / "images"
             depth_dir = self.scene_path / "depth"
 
-            if not (
-                images_dir.exists()
-                and depth_dir.exists()
-            ):
+            if not (images_dir.exists() and depth_dir.exists()):
                 raise FileNotFoundError(
                     f"Required directories not found in {self.scene_path} for unzipped data."
                 )
@@ -112,13 +107,19 @@ class Matterport3DRegionDataset(Dataset):
                 cy = transforms.get("cy", 0.0)
 
             # Construct relative image path
-            image_rel_path = frame["file_path"]  # e.g., "23ec8bbec8eb40478411cba2e55b732e_i0_0.jpg"
+            image_rel_path = frame[
+                "file_path"
+            ]  # e.g., "23ec8bbec8eb40478411cba2e55b732e_i0_0.jpg"
 
             # Construct relative depth path if needed
             depth_path = None
             if self.load_depth:
                 # e.g., 23ec8bbec8eb40478411cba2e55b732e_d0_0.png
-                depth_rel_path = image_rel_path.replace("_i", "_d").replace(".jpg", ".png").replace("images", "depth")
+                depth_rel_path = (
+                    image_rel_path.replace("_i", "_d")
+                    .replace(".jpg", ".png")
+                    .replace("images", "depth")
+                )
                 depth_path = depth_rel_path
 
             # Get transform matrix

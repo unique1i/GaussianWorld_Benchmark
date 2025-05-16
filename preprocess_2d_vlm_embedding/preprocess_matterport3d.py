@@ -6,13 +6,10 @@ import torch
 import zipfile
 import cv2
 import json
-from torch import nn
-import torch
 from PIL import Image
 
 
 from tqdm import tqdm
-from copy import deepcopy
 from torch.utils.data import Dataset, DataLoader
 from model import SigLIPNetwork, SigLIPNetworkConfig, CROP_SIZE, OpenCLIPNetwork
 from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
@@ -56,12 +53,10 @@ class ImageDataset(Dataset):
 
         # If using a zipfile, store its full path.
         self.zip_path = (
-            os.path.join(
-                dataset_path, "color_interval.zip") if zipped else None
+            os.path.join(dataset_path, "color_interval.zip") if zipped else None
         )
         self.depth_zip_path = (
-            os.path.join(
-                dataset_path, "depth_interval.zip") if zipped else None
+            os.path.join(dataset_path, "depth_interval.zip") if zipped else None
         )
 
         # The zip file handle will be opened lazily (per worker)
@@ -79,8 +74,7 @@ class ImageDataset(Dataset):
             # Only open the zip file once per worker.
             if self.zip_handle is None:
                 self.zip_handle = zipfile.ZipFile(self.zip_path, "r")
-                self.depth_zip_handle = zipfile.ZipFile(
-                    self.depth_zip_path, "r")
+                self.depth_zip_handle = zipfile.ZipFile(self.depth_zip_path, "r")
             image_data = self.zip_handle.read(image_path)
             image_array = np.frombuffer(image_data, np.uint8)
             image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
@@ -98,15 +92,14 @@ class ImageDataset(Dataset):
                 with self.depth_zip_ref.open(image_name) as file:
                     img = Image.open(file)
                     img.load()
-                depth = torch.from_numpy(
-                    np.array(img)).float() / self.depth_scale
+                depth = torch.from_numpy(np.array(img)).float() / self.depth_scale
 
         # Apply optional resizing and cropping.
         if self.resize:
             image = cv2.resize(image, self.resize)
         if self.crop_edge:
             image = image[
-                self.crop_edge: -self.crop_edge, self.crop_edge: -self.crop_edge
+                self.crop_edge : -self.crop_edge, self.crop_edge : -self.crop_edge
             ]
 
         image_tensor = torch.from_numpy(image).permute(2, 0, 1).unsqueeze(0)
@@ -140,8 +133,7 @@ def create(image_list, data_list, save_folder):
     for i, img in tqdm(enumerate(image_list), desc="Embedding images", leave=False):
         timer += 1
         try:
-            img_embed, seg_map = _embed_clip_sam_tiles(
-                img.unsqueeze(0), sam_encoder)
+            img_embed, seg_map = _embed_clip_sam_tiles(img.unsqueeze(0), sam_encoder)
         except:
             raise ValueError(timer)
 
@@ -167,8 +159,7 @@ def create(image_list, data_list, save_folder):
             if j == 0:
                 seg_map_tensor.append(torch.from_numpy(v))
                 continue
-            assert v.max() == lengths[j] - \
-                1, f"{j}, {v.max()}, {lengths[j] - 1}"
+            assert v.max() == lengths[j] - 1, f"{j}, {v.max()}, {lengths[j] - 1}"
             v[v != -1] += lengths_cumsum[j - 1]
             seg_map_tensor.append(torch.from_numpy(v))
         seg_map = torch.stack(seg_map_tensor, dim=0)
@@ -176,8 +167,7 @@ def create(image_list, data_list, save_folder):
 
         save_path = os.path.join(save_folder, data_list[i].split(".")[0])
         assert total_lengths[i] == int(seg_maps[i].max() + 1)
-        curr = {
-            "feature": img_embeds[i, : total_lengths[i]], "seg_maps": seg_maps[i]}
+        curr = {"feature": img_embeds[i, : total_lengths[i]], "seg_maps": seg_maps[i]}
         sava_numpy(save_path, curr)
     mask_generator.predictor.model.to("cpu")
 
@@ -218,7 +208,7 @@ def _embed_clip_sam_tiles(image, sam_encoder_func):
         num_crops = crops.shape[0]
         features = []
         for i in range(0, num_crops, batch_size):
-            batch = crops[i: i + batch_size].to("cuda")
+            batch = crops[i : i + batch_size].to("cuda")
             with torch.no_grad():
                 batch_feats = model.encode_image(batch)
             features.append(batch_feats.cpu())
@@ -289,14 +279,14 @@ def _embed_clip_sam_tiles(image, sam_encoder_func):
 def get_bbox_crop(mask, image):
     """Crop the image using the mask's bounding box, retaining background."""
     x, y, w, h = np.int32(mask["bbox"])
-    return image[y: y + h, x: x + w, ...]
+    return image[y : y + h, x : x + w, ...]
 
 
 def get_seg_img(mask, image):
     image = image.copy()
     image[mask["segmentation"] == 0] = np.array([0, 0, 0], dtype=np.uint8)
     x, y, w, h = np.int32(mask["bbox"])
-    seg_img = image[y: y + h, x: x + w, ...]
+    seg_img = image[y : y + h, x : x + w, ...]
     return seg_img
 
 
@@ -305,9 +295,9 @@ def pad_img(img):
     l = max(w, h)
     pad = np.zeros((l, l, 3), dtype=np.uint8)
     if h > w:
-        pad[:, (h - w) // 2: (h - w) // 2 + w, :] = img
+        pad[:, (h - w) // 2 : (h - w) // 2 + w, :] = img
     else:
-        pad[(w - h) // 2: (w - h) // 2 + h, :, :] = img
+        pad[(w - h) // 2 : (w - h) // 2 + h, :, :] = img
     return pad
 
 
@@ -327,8 +317,7 @@ def mask_nms(masks, scores, iou_thr=0.7, score_thr=0.1, inner_thr=0.2, **kwargs)
     masks_ord = masks[idx.view(-1), :]
     masks_area = torch.sum(masks_ord, dim=(1, 2), dtype=torch.float)
 
-    iou_matrix = torch.zeros(
-        (num_masks,) * 2, dtype=torch.float, device=masks.device)
+    iou_matrix = torch.zeros((num_masks,) * 2, dtype=torch.float, device=masks.device)
     inner_iou_matrix = torch.zeros(
         (num_masks,) * 2, dtype=torch.float, device=masks.device
     )
@@ -464,8 +453,7 @@ def sam_encoder(image, min_segments=3):
     # check the size each mask in masks_default
     masks_default = [m for m in masks_default if m["area"] > 10]
     seg_images, seg_maps = {}, {}
-    seg_images["default"], seg_maps["default"] = mask2segmap(
-        masks_default, image)
+    seg_images["default"], seg_maps["default"] = mask2segmap(masks_default, image)
     return seg_images, seg_maps
 
 
@@ -511,9 +499,9 @@ def process_single_image(img, data_path, image_name, save_folder):
     for j, (k, v) in enumerate(seg_map.items()):
         mask_int = torch.from_numpy(v)
         if j != 0:
-            assert mask_int.max() == lengths[j] - 1, (
-                f"{j}, {mask_int.max()}, {lengths[j] - 1}"
-            )
+            assert (
+                mask_int.max() == lengths[j] - 1
+            ), f"{j}, {mask_int.max()}, {lengths[j] - 1}"
             mask_int[mask_int != -1] += lengths_cumsum[j - 1]
         seg_map_tensor_list.append(mask_int)
 
@@ -554,10 +542,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset_path", type=str, required=True)
-    parser.add_argument("--model", type=str,
-                        default="sam2", help="sam2 or sam")
-    parser.add_argument("--resolution", type=int,
-                        default=-1, help="target width size")
+    parser.add_argument("--model", type=str, default="sam2", help="sam2 or sam")
+    parser.add_argument("--resolution", type=int, default=-1, help="target width size")
     parser.add_argument("--resize", type=tuple, default=None)
     parser.add_argument("--crop_edge", type=int, default=0)
     parser.add_argument("--zipped", action="store_true")
@@ -638,8 +624,7 @@ if __name__ == "__main__":
         resize=None,  # not needed for this dataset
         crop_edge=args.crop_edge,
     )
-    dataloader = DataLoader(dataset, batch_size=1,
-                            num_workers=8, pin_memory=True)
+    dataloader = DataLoader(dataset, batch_size=1, num_workers=8, pin_memory=True)
 
     for sample in tqdm(dataloader, desc="Processing images", total=len(dataset)):
         # Each sample is a dict with keys "image" and "image_name"
@@ -648,8 +633,7 @@ if __name__ == "__main__":
         data_path = image_name
 
         # try:
-        process_single_image(image_tensor, dataset_path,
-                             image_name, save_folder)
+        process_single_image(image_tensor, dataset_path, image_name, save_folder)
         # except Exception as e:
         #     print(f"\nFailed to process image {data_path}: {str(e)}")
         #     if not os.path.exists("failed_images.txt"):

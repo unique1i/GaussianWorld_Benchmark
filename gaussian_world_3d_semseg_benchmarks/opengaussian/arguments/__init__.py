@@ -3,7 +3,7 @@
 # GRAPHDECO research group, https://team.inria.fr/graphdeco
 # All rights reserved.
 #
-# This software is free for non-commercial, research and evaluation use 
+# This software is free for non-commercial, research and evaluation use
 # under the terms of the LICENSE.md file.
 #
 # For inquiries contact  george.drettakis@inria.fr
@@ -13,11 +13,13 @@ from argparse import ArgumentParser, Namespace
 import sys
 import os
 
+
 class GroupParams:
     pass
 
+
 class ParamGroup:
-    def __init__(self, parser: ArgumentParser, name : str, fill_none = False):
+    def __init__(self, parser: ArgumentParser, name: str, fill_none=False):
         group = parser.add_argument_group(name)
         for key, value in vars(self).items():
             shorthand = False
@@ -25,12 +27,16 @@ class ParamGroup:
                 shorthand = True
                 key = key[1:]
             t = type(value)
-            value = value if not fill_none else None 
+            value = value if not fill_none else None
             if shorthand:
                 if t == bool:
-                    group.add_argument("--" + key, ("-" + key[0:1]), default=value, action="store_true")
+                    group.add_argument(
+                        "--" + key, ("-" + key[0:1]), default=value, action="store_true"
+                    )
                 else:
-                    group.add_argument("--" + key, ("-" + key[0:1]), default=value, type=t)
+                    group.add_argument(
+                        "--" + key, ("-" + key[0:1]), default=value, type=t
+                    )
             else:
                 if t == bool:
                     group.add_argument("--" + key, default=value, action="store_true")
@@ -44,7 +50,8 @@ class ParamGroup:
                 setattr(group, arg[0], arg[1])
         return group
 
-class ModelParams(ParamGroup): 
+
+class ModelParams(ParamGroup):
     def __init__(self, parser, sentinel=False):
         self.sh_degree = 3
         self._source_path = ""
@@ -62,6 +69,7 @@ class ModelParams(ParamGroup):
         g.source_path = os.path.abspath(g.source_path)
         return g
 
+
 class PipelineParams(ParamGroup):
     def __init__(self, parser):
         self.convert_SHs_python = False
@@ -69,9 +77,10 @@ class PipelineParams(ParamGroup):
         self.debug = False
         super().__init__(parser, "Pipeline Parameters")
 
+
 class OptimizationParams(ParamGroup):
     def __init__(self, parser):
-        self.leaf_update_fr = 300           # coarse-level codebook update frequency
+        self.leaf_update_fr = 300  # coarse-level codebook update frequency
         self.ins_feat_dim = 6
         self.position_lr_init = 0.00016
         self.position_lr_final = 0.0000016
@@ -91,24 +100,36 @@ class OptimizationParams(ParamGroup):
         self.densify_grad_threshold = 0.0002
         self.random_background = False
 
-        parser.add_argument('--root_node_num', type=int, default=64)    # k1=64
-        parser.add_argument('--leaf_node_num', type=int, default=5)     # k2=5/10
+        parser.add_argument("--root_node_num", type=int, default=64)  # k1=64
+        parser.add_argument("--leaf_node_num", type=int, default=5)  # k2=5/10
 
-        parser.add_argument('--pos_weight', type=float, default=1.0)    # position weight for coarse codebook
-        parser.add_argument('--loss_weight', type=float, default=0.1)   # loss_cohesion weight
+        parser.add_argument(
+            "--pos_weight", type=float, default=1.0
+        )  # position weight for coarse codebook
+        parser.add_argument(
+            "--loss_weight", type=float, default=0.1
+        )  # loss_cohesion weight
 
-        parser.add_argument('--iterations', type=int, default=70_000)   # default 7w, scannet 9w
-        parser.add_argument('--start_ins_feat_iter', type=int, default=30_000)  # default 3w
-        parser.add_argument('--start_root_cb_iter', type=int, default=40_000)   # default 4w, scannet 5w
-        parser.add_argument('--start_leaf_cb_iter', type=int, default=50_000)   # default 5w, scannet 7w
+        parser.add_argument(
+            "--iterations", type=int, default=70_000
+        )  # default 7w, scannet 9w
+        parser.add_argument(
+            "--start_ins_feat_iter", type=int, default=30_000
+        )  # default 3w
+        parser.add_argument(
+            "--start_root_cb_iter", type=int, default=40_000
+        )  # default 4w, scannet 5w
+        parser.add_argument(
+            "--start_leaf_cb_iter", type=int, default=50_000
+        )  # default 5w, scannet 7w
 
         # note: Freeze the position of the initial point, do not densify. for ScanNet
-        parser.add_argument('--frozen_init_pts', action='store_true', default=False)
-        parser.add_argument('--sam_level', type=int, default=3)
+        parser.add_argument("--frozen_init_pts", action="store_true", default=False)
+        parser.add_argument("--sam_level", type=int, default=3)
 
-        parser.add_argument('--save_memory', action='store_true', default=False)
+        parser.add_argument("--save_memory", action="store_true", default=False)
         super().__init__(parser, "Optimization Parameters")
-    
+
     def extract(self, args):
         g = super().extract(args)
         g.root_node_num = args.root_node_num
@@ -125,7 +146,8 @@ class OptimizationParams(ParamGroup):
 
         return g
 
-def get_combined_args(parser : ArgumentParser):
+
+def get_combined_args(parser: ArgumentParser):
     cmdlne_string = sys.argv[1:]
     cfgfile_string = "Namespace()"
     args_cmdline = parser.parse_args(cmdlne_string)
@@ -142,7 +164,7 @@ def get_combined_args(parser : ArgumentParser):
     args_cfgfile = eval(cfgfile_string)
 
     merged_dict = vars(args_cfgfile).copy()
-    for k,v in vars(args_cmdline).items():
+    for k, v in vars(args_cmdline).items():
         if v != None:
             merged_dict[k] = v
     return Namespace(**merged_dict)

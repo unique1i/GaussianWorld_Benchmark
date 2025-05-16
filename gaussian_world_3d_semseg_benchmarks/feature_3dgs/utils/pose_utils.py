@@ -4,6 +4,7 @@ import numpy as np
 def normalize(x):
     return x / np.linalg.norm(x)
 
+
 def viewmatrix(z, up, pos):
     vec2 = normalize(z)
     vec1_avg = up
@@ -11,6 +12,7 @@ def viewmatrix(z, up, pos):
     vec1 = normalize(np.cross(vec2, vec0))
     m = np.stack([vec0, vec1, vec2, pos], 1)
     return m
+
 
 def poses_avg(poses):
     hwf = poses[0, :3, -1:]
@@ -21,6 +23,7 @@ def poses_avg(poses):
     c2w = np.concatenate([viewmatrix(vec2, up, center), hwf], 1)
 
     return c2w
+
 
 def render_path_spiral(views, focal=30, zrate=0.5, rots=2, N=120):
     poses = []
@@ -43,7 +46,8 @@ def render_path_spiral(views, focal=30, zrate=0.5, rots=2, N=120):
     for theta in np.linspace(0.0, 2.0 * np.pi * rots, N + 1)[:-1]:
         c = np.dot(
             c2w[:3, :4],
-            np.array([np.cos(theta), -np.sin(theta), -np.sin(theta * zrate), 1.0]) * rads,
+            np.array([np.cos(theta), -np.sin(theta), -np.sin(theta * zrate), 1.0])
+            * rads,
         )
         z = normalize(c - np.dot(c2w[:3, :4], np.array([0, 0, -focal, 1.0])))
         render_pose = np.eye(4)
@@ -117,7 +121,7 @@ def spherify_poses(views):
 
         render_pose = np.eye(4)
         render_pose[:3] = p
-        #render_pose[:3, 1:3] *= -1
+        # render_pose[:3, 1:3] *= -1
         new_poses.append(render_pose)
 
     new_poses = np.stack(new_poses, 0)

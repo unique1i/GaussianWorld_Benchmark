@@ -1,18 +1,18 @@
-import os
 import json
 import zipfile
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 import cv2
 import torch
 from torch.utils.data import Dataset
 from PIL import Image
 import numpy as np
-from tqdm import tqdm
+
 
 def load_npz_first(path):
     with np.load(path) as d:
         return d[list(d.keys())[0]]
+
 
 class AriaSyntheticEnvsDataset(Dataset):
     def __init__(
@@ -70,22 +70,19 @@ class AriaSyntheticEnvsDataset(Dataset):
         if self.zipped:
             images_dir = self.scene_path / "rgb_undistorted.zip"
             depth_dir = self.scene_path / "depth_undistorted.zip"
-            if not (
-                images_dir.exists()
-                and depth_dir.exists()
-            ):
+            if not (images_dir.exists() and depth_dir.exists()):
                 raise FileNotFoundError(
                     f"Required zip files not found in {self.scene_path} for zipped data."
                 )
-            self.images_zip, self.depth_zip = None, None # will be initialized in each worker process
+            self.images_zip, self.depth_zip = (
+                None,
+                None,
+            )  # will be initialized in each worker process
         else:
             images_dir = self.scene_path / "rgb_undistorted"
             depth_dir = self.scene_path / "depth_undistorted"
 
-            if not (
-                images_dir.exists()
-                and depth_dir.exists()
-            ):
+            if not (images_dir.exists() and depth_dir.exists()):
                 raise FileNotFoundError(
                     f"Required directories not found in {self.scene_path} for unzipped data."
                 )
@@ -123,12 +120,18 @@ class AriaSyntheticEnvsDataset(Dataset):
                 cy = transforms.get("cy", 0.0)
 
             # Construct relative image path
-            image_rel_path = frame["file_path"]  # e.g., "23ec8bbec8eb40478411cba2e55b732e_i0_0.jpg"
+            image_rel_path = frame[
+                "file_path"
+            ]  # e.g., "23ec8bbec8eb40478411cba2e55b732e_i0_0.jpg"
 
             # Construct relative depth path if needed
             depth_path = None
             if self.load_depth:
-                depth_rel_path = image_rel_path.replace("rgb", "depth").replace(".jpg", ".png").replace("frame", "depth")
+                depth_rel_path = (
+                    image_rel_path.replace("rgb", "depth")
+                    .replace(".jpg", ".png")
+                    .replace("frame", "depth")
+                )
                 depth_path = depth_rel_path
 
             # Get transform matrix
@@ -283,7 +286,9 @@ class AriaSyntheticEnvsDataset(Dataset):
             img = Image.open(image_path).convert("RGB")
         return img
 
-    def _load_depth(self, depth_rel_path: str, zipped: bool, intrinsics: None) -> torch.Tensor:
+    def _load_depth(
+        self, depth_rel_path: str, zipped: bool, intrinsics: None
+    ) -> torch.Tensor:
         """
         Load a depth map either from a zip file or the filesystem.
 
@@ -294,6 +299,7 @@ class AriaSyntheticEnvsDataset(Dataset):
         Returns:
             torch.Tensor: Depth map tensor in meters, shape [1, H, W].
         """
+
         def _raydepth_to_zdepth_mm(
             depth_mm: np.ndarray,
             fx: float,
@@ -315,7 +321,7 @@ class AriaSyntheticEnvsDataset(Dataset):
                 scale = 1.0 + vs[np.newaxis, :] ** 2 + us[:, np.newaxis] ** 2
             z_mm = np.sqrt(np.square(depth_f) / scale)
             return z_mm.astype(np.uint16)
-        
+
         if zipped:
             # Load depth from zip
             if self.depth_zip is None:
@@ -335,9 +341,16 @@ class AriaSyntheticEnvsDataset(Dataset):
             if not depth_path.exists():
                 raise FileNotFoundError(f"Depth file not found: {depth_path}")
             depth_mm = cv2.imread(depth_path, cv2.IMREAD_UNCHANGED).astype(np.float32)
-        
+
         # Convert depth
-        depth_z_mm = _raydepth_to_zdepth_mm(depth_mm, intrinsics["fx"], intrinsics["fy"], intrinsics["cx"], intrinsics["cy"], None)
+        depth_z_mm = _raydepth_to_zdepth_mm(
+            depth_mm,
+            intrinsics["fx"],
+            intrinsics["fy"],
+            intrinsics["cx"],
+            intrinsics["cy"],
+            None,
+        )
         depth_z_m = depth_z_mm.astype(np.float32) / self.depth_scale
         depth_tensor = torch.from_numpy(depth_z_m)
 

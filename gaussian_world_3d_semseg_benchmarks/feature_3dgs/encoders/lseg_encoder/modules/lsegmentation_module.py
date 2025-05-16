@@ -1,10 +1,6 @@
-import types
 import time
 import random
-import clip
 import torch
-import torch.nn as nn
-import torchvision.transforms as transforms
 
 from argparse import ArgumentParser
 
@@ -13,7 +9,6 @@ import torchmetrics
 
 from data import get_dataset, get_available_datasets
 
-from encoding.models import get_segmentation_model
 from encoding.nn import SegmentationLosses
 
 from encoding.utils import batch_pix_accuracy, batch_intersection_union
@@ -23,6 +18,7 @@ import torch.cuda.amp as amp
 import numpy as np
 
 from encoding.utils import SegmentationMetric
+
 
 class LSegmentationModule(pl.LightningModule):
     def __init__(self, data_path, dataset, batch_size, base_lr, max_epochs, **kwargs):
@@ -35,7 +31,7 @@ class LSegmentationModule(pl.LightningModule):
 
         self.epochs = max_epochs
         self.other_kwargs = kwargs
-        self.enabled = False #True mixed precision will make things complicated and leading to NAN error
+        self.enabled = False  # True mixed precision will make things complicated and leading to NAN error
         self.scaler = amp.GradScaler(enabled=self.enabled)
 
     def forward(self, x, labelset="", return_feature=False):
@@ -73,7 +69,7 @@ class LSegmentationModule(pl.LightningModule):
         ]
         return labels[np.random.randint(len(labels))]
 
-    #def sample_positive_template(self, phrase):
+    # def sample_positive_template(self, phrase):
     #    labels = [
     #        "{}",
     #    ]
@@ -114,8 +110,8 @@ class LSegmentationModule(pl.LightningModule):
     def validation_step(self, batch, batch_nb):
         if len(batch) == 2:
             img, target = batch
-            #print(img.shape, target.shape, torch.unique(target), "ppp")
-            #torch.Size([1, 3, 480, 480]) torch.Size([1, 480, 480]) tensor([ -1,   1,   6,  11,  12,  40,  41,  43,  83, 123, 127, 136, 138, 149]
+            # print(img.shape, target.shape, torch.unique(target), "ppp")
+            # torch.Size([1, 3, 480, 480]) torch.Size([1, 480, 480]) tensor([ -1,   1,   6,  11,  12,  40,  41,  43,  83, 123, 127, 136, 138, 149]
             out = self(img)
         else:
             assert len(batch) == 3
@@ -125,7 +121,7 @@ class LSegmentationModule(pl.LightningModule):
             # print(img.shape, target.shape, "ppp")
             # print([phrase, type(phrase)], "ppppppp")
             # torch.Size([1, 3, 480, 480]) torch.Size([1, 1, 480, 480]) ppp
-            #[[('stainless steel faucet',)], <class 'list'>] ppppppp
+            # [[('stainless steel faucet',)], <class 'list'>] ppppppp
             out = self(img, labelset=["other", phrase])
             # print(out.shape)
         multi_loss = isinstance(out, tuple)
@@ -165,12 +161,29 @@ class LSegmentationModule(pl.LightningModule):
             # {"params": self.net.pretrained.parameters(), "lr": self.base_lr},
             # {"params": self.net.pretrained.parameters(), "lr": self.base_lr},
         ]
-        print(list(sorted(set([n.replace(".weight", ".*").replace(".bias", ".*").replace("model.", "-") for n, p in self.net.pretrained.named_parameters()]))), "updated")
+        print(
+            list(
+                sorted(
+                    set(
+                        [
+                            n.replace(".weight", ".*")
+                            .replace(".bias", ".*")
+                            .replace("model.", "-")
+                            for n, p in self.net.pretrained.named_parameters()
+                        ]
+                    )
+                )
+            ),
+            "updated",
+        )
         if getattr(self.net, "reduce_text_feature", None) is not None:
             print("Found reduce_text_feature")
             print(self.net.reduce_text_feature)
             params_list.append(
-                {"params": self.net.reduce_text_feature.parameters(), "lr": self.base_lr}
+                {
+                    "params": self.net.reduce_text_feature.parameters(),
+                    "lr": self.base_lr,
+                }
             )
         else:
             print("No reduce_text_feature")
@@ -190,9 +203,7 @@ class LSegmentationModule(pl.LightningModule):
         if hasattr(self.net, "logit_scale"):
             print("Found logit_scale")
             print(self.net.logit_scale)
-            params_list.append(
-                {"params": [self.net.logit_scale], "lr": self.base_lr}
-            )
+            params_list.append({"params": [self.net.logit_scale], "lr": self.base_lr})
         if hasattr(self.net, "scratch"):
             print("Found output scratch")
             params_list.append(
@@ -230,12 +241,10 @@ class LSegmentationModule(pl.LightningModule):
                 betas=(0.9, 0.999),
                 weight_decay=self.other_kwargs["weight_decay"],
             )
-            sch = torch.optim.lr_scheduler.LambdaLR(
-                opt, lambda x: 1.
-            )
+            sch = torch.optim.lr_scheduler.LambdaLR(opt, lambda x: 1.0)
         elif self.other_kwargs["midasproto"]:
             print("Using midas optimization protocol")
-            
+
             opt = torch.optim.Adam(
                 params_list,
                 lr=self.base_lr,
@@ -290,7 +299,7 @@ class LSegmentationModule(pl.LightningModule):
             split="train",
             mode=mode,
             transform=self.train_transform,
-            **kwargs
+            **kwargs,
         )
 
         self.num_classes = dset.num_class
@@ -316,18 +325,17 @@ class LSegmentationModule(pl.LightningModule):
             split="val",
             mode=mode,
             transform=self.val_transform,
-            **kwargs
+            **kwargs,
         )
-
 
     def get_criterion(self, **kwargs):
         return SegmentationLosses(
-            se_loss=kwargs["se_loss"], 
-            aux=kwargs["aux"], 
-            nclass=self.num_classes, 
-            se_weight=kwargs["se_weight"], 
-            aux_weight=kwargs["aux_weight"], 
-            ignore_index=kwargs["ignore_index"], 
+            se_loss=kwargs["se_loss"],
+            aux=kwargs["aux"],
+            nclass=self.num_classes,
+            se_weight=kwargs["se_weight"],
+            aux_weight=kwargs["aux_weight"],
+            ignore_index=kwargs["ignore_index"],
         )
 
     @staticmethod

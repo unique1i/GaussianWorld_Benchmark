@@ -1,20 +1,16 @@
-from copy import deepcopy
 from typing import Literal
 import tyro
 import os
 import torch
 import cv2
 import imageio  # To generate gifs
-import pycolmap_scene_manager as pycolmap
 from gsplat import rasterization
 import numpy as np
-import clip
 import matplotlib
 from sklearn.decomposition import PCA
 
 matplotlib.use("TkAgg")
 
-from lseg import LSegNet
 from utils import (
     prune_by_gradients,
     test_proper_pruning,
@@ -126,7 +122,6 @@ def main(
     show_visual_feedback: bool = True,
     feature: Literal["lseg", "dino"] = "lseg",
 ):
-
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for this demo")
 
