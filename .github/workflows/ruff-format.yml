@@ -1,44 +1,44 @@
-name: “Auto-format with Ruff”
+# .github/workflows/ruff.yml
+name: "Auto-format with Ruff"
+
 on:
   push:
-    branches: [ main, 'release/**' ]
+    branches: [main, "release/**"]
   pull_request:
-    paths: [ '**/*.py' ]
+    paths: ["**/*.py"]
 
 jobs:
-  format:
+  ruff:
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up Python 3.x
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.x'
+          python-version: "3.12"
 
-      - name: Install latest Ruff
+      - name: Install Ruff
         run: |
           python -m pip install --upgrade pip
-          pip install 'ruff>=0.0.42'
+          pip install "ruff==0.11.*"        # pin to current minor for stability
 
-      - name: Run Ruff lint autofixes
-        run: |
-          ruff check --fix .
+      - name: Ruff lint (autofix)
+        run: ruff check --fix .
 
-      - name: Run Ruff formatter
-        run: |
-          ruff format .
+      - name: Ruff format
+        run: ruff format .
 
-      - name: Commit formatted code
+      - name: Commit fixes
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
-          commit_message: "chore: apply Ruff formatting"
-          file_pattern: "."
-          author_name: github-actions
-          author_email: actions@github.com
+          commit_message: "chore: apply Ruff auto-fixes"
+          file_pattern: "**/*.py"
+          commit_user_name: github-actions
+          commit_user_email: actions@github.com

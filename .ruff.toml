@@ -1,8 +1,11 @@
-[tool.ruff]
-# Which rules to enable/disable
-select = ["E", "F", "I", "B", "C"]
-ignore = ["E501"]         # ignore line‐length
-extend-ignore = ["W391"]  # trailing‐newline warning
-# How aggressively to wrap imports, etc.
+# .ruff.toml  – top-level keys only
 line-length = 88
-target-version = "py310"
+target-version = "py312"          # match your CI interpreter
+exclude = [".venv", ".git", "dist"]
+
+[lint]
+select = ["E", "F", "I", "B"]     # flake8-bugbear + default
+ignore = ["E501"]                 # don’t fail on long lines
+
+[format]
+quote-style = "double"
