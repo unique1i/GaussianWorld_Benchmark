@@ -3,7 +3,6 @@
 select   = ["E", "F", "I", "B"]       # keep same families
 ignore   = ["B006"]                  # turn off mutable-default check
 unfixable = ["B"]                    # don't try buggy auto-fixes
-max-line-length = 88                  # set maximum line length
 
 [lint.per-file-ignores]
 "**/__init__.py" = ["F401"]          # allow re-exports
