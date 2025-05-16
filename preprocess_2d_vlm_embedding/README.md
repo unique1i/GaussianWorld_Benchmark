@@ -1,11 +1,5 @@
 # Process ScanNetpp Images to Language Features
 
-## Clone the Repository
-
-```bash
-git clone git@github.com:RunyiYang/CLIP-SAM-process.git
-```
-
 ## Download Checkpoints
 
 1. **Option 1: Download all SAM2 checkpoints (optional):**
