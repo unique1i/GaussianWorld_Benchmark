@@ -1,6 +1,6 @@
 # gsplat
 
-3DGS traing based on Gsplat 1.3.0 version.
+3DGS optimization based on Gsplat 1.3.0 version.
 
 ### Environment Setup
 
