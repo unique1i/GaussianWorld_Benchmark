@@ -1,22 +1,32 @@
-name: "Ruff (format ➜ lint)"
+name: "Style: Ruff autofix"
 
 on:
-  push: {branches: [main, "release/**"]}
-  pull_request: {paths: ["**/*.py"]}
+  push:
+    branches: [main]
+  pull_request:
+    paths: ["**/*.py"]
+
+# 1️⃣ elevate GITHUB_TOKEN once, instead of repo-wide setting
+permissions:
+  contents: write
 
 jobs:
-  style:
+  ruff:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
-        with: {python-version: "3.12"}
+        with:
+          python-version: "3.12"
 
       - run: |
           pip install "ruff==0.11.*"
-          ruff format .                       # auto-wrap where possible
-          ruff check --fix --exit-zero .      # fix what’s fixable, never fail
-      - uses: stefanzweifel/git-auto-commit-action@v4
+          ruff format .
+          ruff check --fix .
+
+      # 2️⃣ only try to push when token can write
+      - name: Commit changes
+        if: github.event.pull_request == null
+        uses: stefanzweifel/git-auto-commit-action@v4
         with:
           commit_message: "chore: Ruff auto-format"
-
